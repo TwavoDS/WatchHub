@@ -65,9 +65,12 @@ class NavHandler(private val ctx: Context) {
 
         // Google Maps puts the distance in the title ("300 m") and the instruction in the
         // text ("Sla linksaf naar Kerkstraat"); sometimes it is the other way round.
-        val (dist, instruction) = if (looksLikeDistance(title) || text.isEmpty()) title to text
-        else if (looksLikeDistance(text)) text to title
-        else title to text
+        // Without a distance (e.g. "Loop richting de Schaapsdam") the title is the instruction
+        val (dist, instruction) = when {
+            looksLikeDistance(title) -> title to text
+            looksLikeDistance(text) -> text to title
+            else -> "" to title.ifEmpty { text }
+        }
         val (instr, street) = splitStreet(instruction)
 
         val icon = maneuverIcon(n)

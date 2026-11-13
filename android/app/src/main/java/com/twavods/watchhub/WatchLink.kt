@@ -173,17 +173,30 @@ object WatchLink {
             }
     }
 
+    /** Result of the last attempt to open the watch app, shown in the phone app. */
+    var lastLaunch = ""
+
     fun openOnWatch(page: String = PAGE_HOME) {
         val id = nodeId
         if (id == null || !permissionOk) { whenReady { openOnWatch(page) }; return }
         nodeApi.isWearAppInstalled(id)
             .addOnSuccessListener { installed ->
-                if (installed == true) {
-                    nodeApi.launchWearApp(id, page)
-                        .addOnFailureListener { e -> main.post { lastError = "openen: ${e.message}" } }
-                } else main.post { lastError = "WatchHub staat niet op het horloge" }
+                if (installed == true) launch(id, page, fallback = true)
+                else main.post { lastLaunch = "WatchHub staat niet op het horloge" }
             }
-            .addOnFailureListener { e -> main.post { lastError = "controle: ${e.message}" } }
+            .addOnFailureListener { e -> main.post { lastLaunch = "controle mislukt: ${e.message}" } }
+    }
+
+    private fun launch(id: String, page: String, fallback: Boolean) {
+        nodeApi.launchWearApp(id, page)
+            .addOnSuccessListener { main.post { lastLaunch = "geopend ($page)" } }
+            .addOnFailureListener { e ->
+                main.post {
+                    lastLaunch = "openen mislukt ($page): ${e.message}"
+                    // Try the start page of the app if the specific page is not accepted
+                    if (fallback && page != PAGE_HOME) launch(id, PAGE_HOME, fallback = false)
+                }
+            }
     }
 
     /** Called when a new frame source becomes active, to resume a running stream. */

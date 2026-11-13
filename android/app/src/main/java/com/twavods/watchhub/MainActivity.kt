@@ -153,6 +153,7 @@ class MainActivity : ComponentActivity() {
             append("\nNavigatie: ")
             append(if (nav == null) "niet actief" else "${nav.dist} · ${nav.instr}")
             if (NotifRules.isQuietNow(this@MainActivity)) append("\nStille uren actief")
+            if (WatchLink.lastLaunch.isNotEmpty()) append("\nHorloge-app openen: ").append(WatchLink.lastLaunch)
             if (WatchLink.lastError.isNotEmpty()) append("\nFout: ").append(WatchLink.lastError)
         }
         main.postDelayed({ tick() }, 1000)
