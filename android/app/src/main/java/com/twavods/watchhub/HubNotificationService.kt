@@ -74,8 +74,14 @@ class HubNotificationService : NotificationListenerService() {
     private var nextId = 1
     private val lastText = HashMap<String, String>()
 
+    /** True when the phone is on "Do not disturb" (or another filter than "all"). */
+    private fun phoneDnd(): Boolean = try {
+        currentInterruptionFilter != INTERRUPTION_FILTER_ALL && currentInterruptionFilter != INTERRUPTION_FILTER_UNKNOWN
+    } catch (_: Exception) { false }
+
     override fun onListenerConnected() {
         connected = true
+        PhoneWatch.start(this)
         instance = this
         nav = NavHandler(this)
         WatchLink.init(this)
@@ -128,25 +134,39 @@ class HubNotificationService : NotificationListenerService() {
 
         val (title, text) = texts(n)
         if (title.isEmpty() && text.isEmpty()) return
+        val ex = n.extras
+        val convTitle = ex?.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE)?.toString().orEmpty()
+        val isGroup = ex?.getBoolean("android.isGroupConversation", false) == true || convTitle.isNotEmpty()
 
         // Apps re-post the same notification often; only forward real changes
         val sig = "$title|$text"
         if (lastText[sbn.key] == sig) return
         lastText[sbn.key] = sig
 
+        // Contacts and groups
+        val contact = NotifRules.contactFor(this, title, convTitle)
+        if (contact?.mode == "mute") { lastInfo = "gedempt: ${contact.match}"; return }
+        if (isGroup && !rule.groups && contact?.mode != "vip") { lastInfo = "groepsbericht overgeslagen (${appLabel(sbn.packageName)})"; return }
+        val vip = contact?.mode == "vip"
+
         // Filters
         val haystack = "$title $text".lowercase()
         val only = NotifRules.words(rule.onlyWords)
-        if (only.isNotEmpty() && only.none { haystack.contains(it) }) { lastInfo = "gefilterd (trefwoord)"; return }
+        if (!vip && only.isNotEmpty() && only.none { haystack.contains(it) }) { lastInfo = "gefilterd (trefwoord)"; return }
         if (NotifRules.words(rule.blockWords).any { haystack.contains(it) }) { lastInfo = "geblokkeerd (woord)"; return }
         if (NotifRules.skipWhenScreenOn(this) && getSystemService(PowerManager::class.java).isInteractive) {
             lastInfo = "overgeslagen (telefoonscherm aan)"; return
         }
-        val quiet = NotifRules.isQuietNow(this)
+        // Phone on "Do not disturb"
+        val dnd = phoneDnd()
+        if (dnd && !vip && NotifRules.dndMode(this) == "skip") { lastInfo = "overgeslagen (Niet storen)"; return }
+        val quiet = !vip && (NotifRules.isQuietNow(this) || (dnd && NotifRules.dndMode(this) == "quiet"))
+        val vib = if (contact != null && contact.mode != "mute") contact.vib else rule.vib
+        val color = if (contact != null && contact.mode != "mute") contact.color else rule.color
 
         val id = idFor(sbn.key)
         val (actions, replyAction) = splitActions(n)
-        val json = baseJson(id, sbn.packageName, title, text, rule.color, if (quiet) "" else rule.vib, sbn.postTime)
+        val json = baseJson(id, sbn.packageName, title, text, color, if (quiet) "" else vib, sbn.postTime)
             .put("quiet", quiet)
             .put("dur", rule.duration)
             .put("call", false)

@@ -21,6 +21,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import com.twavods.watchhub.ui.parseColor
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -90,6 +99,13 @@ private fun SettingsScreen(onBack: () -> Unit) {
     val replies = remember { mutableStateListOf<String>().apply { addAll(NotifRules.replies(ctx)) } }
     var newReply by remember { mutableStateOf("") }
     var editIndex by remember { mutableIntStateOf(-1) }
+    var dnd by remember { mutableStateOf(NotifRules.dndMode(ctx)) }
+    val contacts = remember { mutableStateListOf<ContactRule>().apply { addAll(NotifRules.contacts(ctx)) } }
+    var editContact by remember { mutableIntStateOf(-1) }
+    var draft by remember { mutableStateOf(ContactRule("")) }
+    var batLow by remember { mutableIntStateOf(NotifRules.batteryLow(ctx)) }
+    var batFull by remember { mutableStateOf(NotifRules.batteryFull(ctx)) }
+    var loss by remember { mutableStateOf(NotifRules.lossAlert(ctx)) }
     var editText by remember { mutableStateOf("") }
 
     fun saveQuiet(s: Int, e: Int) { qStart = s; qEnd = e; NotifRules.setQuiet(ctx, s, e) }
@@ -136,6 +152,84 @@ private fun SettingsScreen(onBack: () -> Unit) {
                         }, 22, 0, true).apply { setTitle("Begin stille uren") }.show()
                     }) { Text(if (qStart < 0) "Instellen" else "Wijzigen") }
                     if (qStart >= 0) OutlinedButton(onClick = { saveQuiet(-1, -1) }) { Text("Uitzetten") }
+                }
+            }
+
+            HubCard("Niet storen op je telefoon", Icons.Filled.Notifications, HubYellow) {
+                Hint("Wat WatchHub doet als je telefoon op Niet storen staat.")
+                ChoiceChips(NotifRules.DND_MODES, dnd) { dnd = it; NotifRules.setDndMode(ctx, it) }
+            }
+
+            HubCard("Contacten en groepen", Icons.Filled.Person, HubGreen) {
+                Hint("Regels voor één persoon of groep, op (een deel van) de naam zoals die in de melding staat, " +
+                    "bv. \"Mama\" of \"Voetbal\". Geldt voor alle apps.")
+                contacts.forEachIndexed { i, c ->
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { editContact = i; draft = c }) {
+                        Box(Modifier.size(14.dp).clip(CircleShape).background(parseColor(if (c.mode == "mute") "#666666" else c.color)))
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(c.match, style = MaterialTheme.typography.bodyLarge)
+                            Hint(when (c.mode) {
+                                "vip" -> "Altijd tonen · ${NotifRules.PATTERNS[c.vib] ?: c.vib}"
+                                "mute" -> "Nooit tonen"
+                                else -> "Eigen trilpatroon: ${NotifRules.PATTERNS[c.vib] ?: c.vib}"
+                            })
+                        }
+                        Icon(Icons.Filled.Edit, contentDescription = "Aanpassen")
+                    }
+                }
+                FilledTonalButton(onClick = { editContact = contacts.size; draft = ContactRule("") }) { Text("Contact of groep toevoegen") }
+            }
+
+            if (editContact >= 0) {
+                val isNew = editContact >= contacts.size
+                AlertDialog(
+                    onDismissRequest = { editContact = -1 },
+                    title = { Text(if (isNew) "Contact of groep" else draft.match) },
+                    text = {
+                        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            OutlinedTextField(value = draft.match, onValueChange = { draft = draft.copy(match = it) },
+                                label = { Text("Naam (of een deel ervan)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                            ChoiceChips(NotifRules.CONTACT_MODES, draft.mode) { draft = draft.copy(mode = it) }
+                            if (draft.mode != "mute") {
+                                Text("Trilpatroon", style = MaterialTheme.typography.titleSmall)
+                                ChoiceChips(NotifRules.PATTERNS, draft.vib) { draft = draft.copy(vib = it) }
+                                Text("Kleur", style = MaterialTheme.typography.titleSmall)
+                                ChoiceChips(NotifRules.COLORS, draft.color) { draft = draft.copy(color = it) }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            if (draft.match.isNotBlank()) {
+                                val c = draft.copy(match = draft.match.trim())
+                                if (isNew) contacts.add(c) else contacts[editContact] = c
+                                NotifRules.setContacts(ctx, contacts.toList())
+                            }
+                            editContact = -1
+                        }) { Text("Opslaan") }
+                    },
+                    dismissButton = {
+                        Row {
+                            if (!isNew) TextButton(onClick = {
+                                contacts.removeAt(editContact); NotifRules.setContacts(ctx, contacts.toList()); editContact = -1
+                            }) { Text("Verwijderen") }
+                            TextButton(onClick = { editContact = -1 }) { Text("Annuleren") }
+                        }
+                    }
+                )
+            }
+
+            HubCard("Telefoon", Icons.Filled.Phone, HubBlue) {
+                Text("Melding op je horloge als je telefoonbatterij bijna leeg is", style = MaterialTheme.typography.bodyLarge)
+                ChoiceChips(NotifRules.BATTERY_LEVELS, batLow) { batLow = it; NotifRules.setBatteryLow(ctx, it) }
+                SwitchRow("Melding als je telefoon volledig opgeladen is", "Op 100% tijdens het laden", batFull) {
+                    batFull = it; NotifRules.setBatteryFull(ctx, it)
+                }
+                SwitchRow("Waarschuwen als je horloge niet meer verbonden is",
+                    "Je telefoon trilt als de verbinding ± 2 minuten weg is, zodat je hem niet laat liggen", loss) {
+                    loss = it; NotifRules.setLossAlert(ctx, it)
                 }
             }
 

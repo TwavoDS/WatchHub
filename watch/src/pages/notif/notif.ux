@@ -23,7 +23,7 @@
     <list if="{{open}}" class="detail" onclick="keepOpen">
       <list-item type="head" class="li-head">
         <image if="{{cur.icon}}" class="big-icon" src="{{cur.icon}}"></image>
-        <text class="d-app" style="color: {{cur.color}};">{{cur.call ? 'Oproep' : cur.app}} · {{cur.time}}</text>
+        <text class="d-app" style="color: {{cur.color}};">{{cur.call ? cur.app + ' · oproep' : cur.app}} · {{cur.time}}</text>
       </list-item>
       <!-- Text with emoji: drawn by the phone as a picture -->
       <list-item if="{{cur.bodyImg}}" type="bodyimg" class="li-img" style="height: {{cur.bodyH + 16}}px;">

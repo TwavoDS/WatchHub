@@ -24,11 +24,13 @@ data class AppRule(
     val duration: Int = 10,
     /** Show the quick replies on the watch for this app. */
     val replies: Boolean = true,
+    /** Forward messages from group chats (WhatsApp groups, …). */
+    val groups: Boolean = true,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("enabled", enabled).put("vib", vib).put("color", color)
         .put("repeatMin", repeatMin).put("onlyWords", onlyWords).put("blockWords", blockWords)
-        .put("display", display).put("duration", duration).put("replies", replies)
+        .put("display", display).put("duration", duration).put("replies", replies).put("groups", groups)
 
     companion object {
         fun fromJson(o: JSONObject) = AppRule(
@@ -41,6 +43,7 @@ data class AppRule(
             display = o.optString("display", "screen"),
             duration = o.optInt("duration", 10),
             replies = o.optBoolean("replies", true),
+            groups = o.optBoolean("groups", true),
         )
     }
 }
@@ -147,5 +150,68 @@ object NotifRules {
     fun setReplies(ctx: Context, list: List<String>) =
         prefs(ctx).edit().putString("replies", list.joinToString("\n")).apply()
 
+    // ---- Contacts and groups --------------------------------------------------------
+
+    /** All saved contact rules. */
+    fun contacts(ctx: Context): List<ContactRule> {
+        val raw = prefs(ctx).getString("contacts", null) ?: return emptyList()
+        return try {
+            val a = org.json.JSONArray(raw)
+            (0 until a.length()).map { ContactRule.fromJson(a.getJSONObject(it)) }
+        } catch (_: Exception) { emptyList() }
+    }
+
+    fun setContacts(ctx: Context, list: List<ContactRule>) {
+        val a = org.json.JSONArray(); list.forEach { a.put(it.toJson()) }
+        prefs(ctx).edit().putString("contacts", a.toString()).apply()
+    }
+
+    /** First rule whose name occurs in the sender or group name (not case sensitive). */
+    fun contactFor(ctx: Context, vararg names: String): ContactRule? {
+        val hay = names.filter { it.isNotBlank() }.map { it.lowercase() }
+        if (hay.isEmpty()) return null
+        return contacts(ctx).firstOrNull { r -> r.match.isNotBlank() && hay.any { it.contains(r.match.lowercase().trim()) } }
+    }
+
+    val CONTACT_MODES = linkedMapOf(
+        "vip" to "Altijd tonen, ook in stille uren en bij Niet storen",
+        "mute" to "Nooit tonen",
+        "own" to "Eigen trilpatroon en kleur",
+    )
+
+    // ---- Phone "Do not disturb" -------------------------------------------------------
+
+    val DND_MODES = linkedMapOf("quiet" to "Wel tonen, niet trillen", "skip" to "Niet doorsturen", "ignore" to "Negeren")
+    fun dndMode(ctx: Context) = prefs(ctx).getString("dnd", "quiet") ?: "quiet"
+    fun setDndMode(ctx: Context, v: String) = prefs(ctx).edit().putString("dnd", v).apply()
+
+    // ---- Phone battery and connection -------------------------------------------------
+
+    val BATTERY_LEVELS = linkedMapOf(0 to "Uit", 15 to "15%", 20 to "20%", 30 to "30%")
+    fun batteryLow(ctx: Context) = prefs(ctx).getInt("batLow", 20)
+    fun setBatteryLow(ctx: Context, v: Int) = prefs(ctx).edit().putInt("batLow", v).apply()
+    fun batteryFull(ctx: Context) = prefs(ctx).getBoolean("batFull", false)
+    fun setBatteryFull(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("batFull", v).apply()
+    fun lossAlert(ctx: Context) = prefs(ctx).getBoolean("loss", false)
+    fun setLossAlert(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("loss", v).apply()
+
     fun words(s: String) = s.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+}
+
+/** Settings for one contact or group, matched on (part of) the name. */
+data class ContactRule(
+    val match: String,
+    /** "vip", "mute" or "own" (see NotifRules.CONTACT_MODES) */
+    val mode: String = "vip",
+    val vib: String = "LL",
+    val color: String = "#FFCA28",
+) {
+    fun toJson(): JSONObject = JSONObject().put("match", match).put("mode", mode).put("vib", vib).put("color", color)
+
+    companion object {
+        fun fromJson(o: JSONObject) = ContactRule(
+            match = o.optString("match"), mode = o.optString("mode", "vip"),
+            vib = o.optString("vib", "LL"), color = o.optString("color", "#FFCA28"),
+        )
+    }
 }

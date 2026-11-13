@@ -181,7 +181,7 @@ private fun AppRow(app: AppEntry, rule: AppRule, onToggle: (Boolean) -> Unit, on
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun <T> ChoiceChips(options: Map<T, String>, selected: T, onSelect: (T) -> Unit) {
+fun <T> ChoiceChips(options: Map<T, String>, selected: T, onSelect: (T) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         options.forEach { (key, label) ->
             FilterChip(
@@ -210,10 +210,11 @@ private fun RuleEditor(app: AppEntry, onClose: () -> Unit) {
     var only by remember { mutableStateOf(start.onlyWords) }
     var block by remember { mutableStateOf(start.blockWords) }
     var replies by remember { mutableStateOf(start.replies) }
+    var groups by remember { mutableStateOf(start.groups) }
 
     fun current() = AppRule(
         enabled = enabled, vib = vib, color = color, repeatMin = repeat,
-        onlyWords = only, blockWords = block, display = display, duration = duration, replies = replies
+        onlyWords = only, blockWords = block, display = display, duration = duration, replies = replies, groups = groups
     )
 
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -282,6 +283,16 @@ private fun RuleEditor(app: AppEntry, onClose: () -> Unit) {
                                 }
                                 Switch(checked = replies, onCheckedChange = { replies = it })
                             }
+                        }
+                    }
+                    HubCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Groepsberichten", style = MaterialTheme.typography.bodyLarge)
+                                Hint("Uit: berichten uit groepsgesprekken (bv. WhatsApp-groepen) komen niet op je horloge. " +
+                                    "Contacten op \"Altijd tonen\" komen wel door.")
+                            }
+                            Switch(checked = groups, onCheckedChange = { groups = it })
                         }
                     }
                     HubCard("Herhalen tot je hem wegtikt") { ChoiceChips(NotifRules.REPEATS, repeat) { repeat = it } }

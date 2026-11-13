@@ -343,6 +343,14 @@ object WatchLink {
             .addOnFailureListener { e -> main.post { lastError = "melding: ${e.message}" } }
     }
 
+    /** Asks Mi Fitness whether the watch is connected right now (for the "watch lost" alert). */
+    fun checkConnected(result: (Boolean) -> Unit) {
+        if (!initialized) { result(true); return }
+        nodeApi.connectedNodes
+            .addOnSuccessListener { nodes -> main.post { result(!nodes.isNullOrEmpty()) } }
+            .addOnFailureListener { main.post { result(true) } }   // unknown: don't raise a false alarm
+    }
+
     /** Sends a message to the watch app, connecting first if needed. */
     fun post(obj: JSONObject) = whenReady { send(obj) }
 
