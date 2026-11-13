@@ -71,6 +71,7 @@ import router from '@system.router'
 let unlisten = null
 let closeTimer = null
 let imgTimer = null
+let dismissing = false
 let autoClose = false
 
 function actClass(title) {
@@ -162,9 +163,10 @@ export default {
   refresh() {
     this.items = link.notifs().map((n) => this.toView(n))
     if (this.open) {
+      // Only a real "gone" from the phone closes it (see onMessage); a list that
+      // briefly lacks it (phone app just restarted) must not close the screen
       const still = this.items.find((i) => i.id === this.cur.id)
       if (still) this.cur = still
-      else this.closeAfterGone()
     }
   },
 
@@ -173,6 +175,9 @@ export default {
       link.takeOpenId()
       this.refresh()
       this.openById(m.id)
+    } else if (m.t === 'gone' && this.open && m.id === this.cur.id && !dismissing) {
+      this.refresh()
+      this.closeAfterGone()
     } else if (m.t === 'list' || m.t === 'gone' || m.t === 'iconReady' || m.t === 'imgReady' || m.t === 'imgRetry') {
       this.refresh()
     } else if (m.t === 'linkError' || m.t === 'linkClosed') {
@@ -200,11 +205,16 @@ export default {
     if (automatic && it.dur > 0 && !it.call) {
       closeTimer = setTimeout(() => this.timeUp(), it.dur * 1000)
     }
-    try { brightness.setKeepScreenOn({ keepScreenOn: it.call || it.dur === 0 }) } catch (e) {}
+    // Keep the screen on while the notification is shown, so it doesn't go dark before its time is up
+    try { brightness.setKeepScreenOn({ keepScreenOn: true }) } catch (e) {}
   },
 
   stopTimer() {
     if (closeTimer) { clearTimeout(closeTimer); closeTimer = null }
+  },
+
+  screenNormal() {
+    try { brightness.setKeepScreenOn({ keepScreenOn: false }) } catch (e) {}
   },
 
   /** Any tap on the notification keeps it open. */
@@ -214,6 +224,7 @@ export default {
 
   timeUp() {
     closeTimer = null
+    this.screenNormal()
     if (autoClose) this.leaveApp()
     else this.open = false
   },
@@ -247,13 +258,17 @@ export default {
 
   closeItem() {
     this.stopTimer()
+    this.screenNormal()
     autoClose = false
     this.open = false
   },
 
   dismissCur() {
     this.stopTimer()
+    this.screenNormal()
+    dismissing = true
     link.dismiss(this.cur.id)
+    dismissing = false
     this.refresh()
     if (autoClose) this.leaveApp()
     else this.open = false

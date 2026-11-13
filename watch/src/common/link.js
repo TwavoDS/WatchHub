@@ -216,7 +216,7 @@ export function connect() {
 
 /** Sends a message to the phone; onFail(text) is called when it could not be sent. */
 // Keep equal to versionCode in manifest.json: the phone uses it to offer updates
-export const VERSION = 10
+export const VERSION = 11
 
 export function send(obj, onFail) {
   if (obj && obj.cmd === 'hello') obj.v = VERSION
