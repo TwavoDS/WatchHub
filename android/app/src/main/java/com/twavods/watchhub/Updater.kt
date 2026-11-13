@@ -17,12 +17,13 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Updates from the "latest" release on GitHub (built by the CI workflow):
+ * Updates from the newest GitHub build (ci-logs branch, written by the CI workflow):
  *  - phone app: downloads the APK and opens the Android installer (you tap "Installeren")
  *  - watch app: downloads the RPK, saves it in Downloads and hands it to Mi Fitness (mod)
  */
 object Updater {
-    private const val BASE = "https://github.com/TwavoDS/WatchHub/releases/download/latest/"
+    // Every CI build puts its files on the ci-logs branch
+    private const val BASE = "https://raw.githubusercontent.com/TwavoDS/WatchHub/ci-logs/"
     const val WEAR_PKG = "com.xiaomi.wearable"
 
     @Volatile var status = ""
@@ -83,6 +84,13 @@ object Updater {
         val app = ctx.applicationContext
         bg {
             status = "Zoeken naar updates…"
+            val st = File(app.cacheDir, "updates/STATUS.txt")
+            download("STATUS.txt", st)
+            if (!st.readText().contains("apk=success rpk=success")) {
+                checked = false
+                status = "Er wordt net een nieuwe versie gebouwd — probeer straks opnieuw"
+                return@bg
+            }
             val f = File(app.cacheDir, "updates/version.json")
             download("version.json", f)
             val j = JSONObject(f.readText())
