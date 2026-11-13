@@ -133,7 +133,7 @@ object NotifRules {
 
     // ---- Quick replies ----------------------------------------------------------
 
-    private val DEFAULT_REPLIES = listOf("Oké 👍", "Ik bel je zo terug", "Onderweg!", "Nu even niet", "Bedankt!")
+    private val DEFAULT_REPLIES = listOf("Oké", "Ik bel je zo terug", "Onderweg!", "Nu even niet", "Bedankt!")
 
     fun replies(ctx: Context): List<String> {
         val raw = prefs(ctx).getString("replies", null) ?: return DEFAULT_REPLIES

@@ -30,18 +30,21 @@ object FindPhone {
         val app = ctx.applicationContext
         val am = app.getSystemService(AudioManager::class.java)
         audio = am
-        oldVolume = am.getStreamVolume(AudioManager.STREAM_ALARM)
-        am.setStreamVolume(AudioManager.STREAM_ALARM, am.getStreamMaxVolume(AudioManager.STREAM_ALARM), 0)
+        try {
+            oldVolume = am.getStreamVolume(AudioManager.STREAM_ALARM)
+            am.setStreamVolume(AudioManager.STREAM_ALARM, am.getStreamMaxVolume(AudioManager.STREAM_ALARM), 0)
+        } catch (_: Exception) { oldVolume = -1 }
 
         val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-        ringtone = RingtoneManager.getRingtone(app, uri)?.apply {
+        ringtone = try { RingtoneManager.getRingtone(app, uri) } catch (_: Exception) { null }
+        ringtone?.apply {
             audioAttributes = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ALARM)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
             if (Build.VERSION.SDK_INT >= 28) isLooping = true
-            play()
+            try { play() } catch (_: Exception) {}
         }
 
         vibrator = if (Build.VERSION.SDK_INT >= 31)

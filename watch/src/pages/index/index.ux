@@ -16,10 +16,7 @@
       <text class="label">Meldingen</text>
       <text if="{{count > 0}}" class="badge">{{count}}</text>
     </div>
-    <div class="item small {{ringing ? 'item-on' : ''}}" onclick="toggleFind">
-      <div class="dot dot-find"></div>
-      <text class="label label-small">{{ringing ? 'Stop zoeken' : 'Zoek telefoon'}}</text>
-    </div>
+    <text class="find {{ringing ? 'find-on' : ''}}" onclick="toggleFind">{{ringing ? 'Stop zoeken' : 'Zoek telefoon'}}</text>
   </div>
 </template>
 
@@ -113,18 +110,19 @@ export default {
 .dot-notif {
   background-color: #66bb6a;
 }
-.small {
-  height: 64px;
-  width: 260px;
+.find {
+  width: 230px;
+  height: 56px;
+  margin-top: 10px;
+  border-radius: 28px;
+  background-color: #3a3000;
+  color: #ffca28;
+  font-size: 22px;
+  text-align: center;
 }
-.item-on {
+.find-on {
   background-color: #b71c1c;
-}
-.dot-find {
-  background-color: #ffca28;
-}
-.label-small {
-  font-size: 26px;
+  color: #ffffff;
 }
 .label {
   font-size: 32px;
