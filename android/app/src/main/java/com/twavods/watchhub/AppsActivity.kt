@@ -209,10 +209,11 @@ private fun RuleEditor(app: AppEntry, onClose: () -> Unit) {
     var repeat by remember { mutableIntStateOf(start.repeatMin) }
     var only by remember { mutableStateOf(start.onlyWords) }
     var block by remember { mutableStateOf(start.blockWords) }
+    var replies by remember { mutableStateOf(start.replies) }
 
     fun current() = AppRule(
         enabled = enabled, vib = vib, color = color, repeatMin = repeat,
-        onlyWords = only, blockWords = block, display = display, duration = duration
+        onlyWords = only, blockWords = block, display = display, duration = duration, replies = replies
     )
 
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -272,6 +273,15 @@ private fun RuleEditor(app: AppEntry, onClose: () -> Unit) {
                         HubCard("Hoe lang tonen") {
                             ChoiceChips(NotifRules.DURATIONS, duration) { duration = it }
                             Hint("Daarna sluit het scherm vanzelf. Tik je erop, dan blijft het staan.")
+                        }
+                        HubCard {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("Snel antwoorden", style = MaterialTheme.typography.bodyLarge)
+                                    Hint("Je standaardantwoorden onder de melding (alleen bij apps waarop je kan antwoorden). Aanpassen in Algemeen.")
+                                }
+                                Switch(checked = replies, onCheckedChange = { replies = it })
+                            }
                         }
                     }
                     HubCard("Herhalen tot je hem wegtikt") { ChoiceChips(NotifRules.REPEATS, repeat) { repeat = it } }

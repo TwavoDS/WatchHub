@@ -22,11 +22,13 @@ data class AppRule(
     val display: String = "screen",
     /** Seconds the WatchHub screen stays open before closing by itself; 0 = until you close it. */
     val duration: Int = 10,
+    /** Show the quick replies on the watch for this app. */
+    val replies: Boolean = true,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("enabled", enabled).put("vib", vib).put("color", color)
         .put("repeatMin", repeatMin).put("onlyWords", onlyWords).put("blockWords", blockWords)
-        .put("display", display).put("duration", duration)
+        .put("display", display).put("duration", duration).put("replies", replies)
 
     companion object {
         fun fromJson(o: JSONObject) = AppRule(
@@ -38,6 +40,7 @@ data class AppRule(
             blockWords = o.optString("blockWords", ""),
             display = o.optString("display", "screen"),
             duration = o.optInt("duration", 10),
+            replies = o.optBoolean("replies", true),
         )
     }
 }
@@ -133,11 +136,12 @@ object NotifRules {
 
     // ---- Quick replies ----------------------------------------------------------
 
-    private val DEFAULT_REPLIES = listOf("Oké 👍", "Ik bel je zo terug", "Onderweg!", "Nu even niet", "Bedankt! 🙏")
+    val DEFAULT_REPLIES = listOf("Oké 👍", "Ik bel je zo terug", "Onderweg!", "Nu even niet", "Bedankt! 🙏")
 
     fun replies(ctx: Context): List<String> {
         val raw = prefs(ctx).getString("replies", null) ?: return DEFAULT_REPLIES
-        return raw.split('\n').map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { DEFAULT_REPLIES }
+        // An empty list is allowed: then no quick replies are shown
+        return raw.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
     }
 
     fun setReplies(ctx: Context, list: List<String>) =

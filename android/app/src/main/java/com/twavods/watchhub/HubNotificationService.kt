@@ -144,7 +144,7 @@ class HubNotificationService : NotificationListenerService() {
             .put("quiet", quiet)
             .put("dur", rule.duration)
             .put("call", false)
-        putActions(json, actions, replyAction)
+        putActions(json, actions, replyAction, rule)
 
         remember(Item(id, sbn.key, json, rule, actions, replyAction))
         forwarded++
@@ -168,7 +168,7 @@ class HubNotificationService : NotificationListenerService() {
             .put("quiet", false)
             .put("dur", 0)
             .put("call", true)
-        putActions(json, actions, null)
+        putActions(json, actions, null, rule)
         remember(Item(id, sbn.key, json, rule, actions, null))
         lastInfo = "oproep: ${title.ifEmpty { "onbekend" }}"
         deliver(json, rule, quiet = false, reminder = false)
@@ -216,11 +216,11 @@ class HubNotificationService : NotificationListenerService() {
         return buttons to reply
     }
 
-    private fun putActions(json: JSONObject, actions: List<Notification.Action>, reply: Notification.Action?) {
+    private fun putActions(json: JSONObject, actions: List<Notification.Action>, reply: Notification.Action?, rule: AppRule) {
         val arr = JSONArray()
         actions.forEachIndexed { i, a -> arr.put(JSONObject().put("i", i).put("title", a.title.toString().take(24))) }
         json.put("actions", arr)
-        json.put("replies", if (reply != null) JSONArray(NotifRules.replies(this)) else JSONArray())
+        json.put("replies", if (reply != null && rule.replies) JSONArray(NotifRules.replies(this)) else JSONArray())
     }
 
     /**
@@ -408,7 +408,7 @@ class HubNotificationService : NotificationListenerService() {
             .put("dur", rule.duration)
             .put("call", false)
             .put("actions", JSONArray())
-            .put("replies", JSONArray(NotifRules.replies(this)))
+            .put("replies", if (rule.replies) JSONArray(NotifRules.replies(this)) else JSONArray())
         remember(Item(id, "test:$id", json, rule, emptyList(), null))
         deliver(json, rule, quiet = false, reminder = false)
     }

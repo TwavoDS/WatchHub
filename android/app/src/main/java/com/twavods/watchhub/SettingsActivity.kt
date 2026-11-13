@@ -21,6 +21,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.FilledTonalButton
@@ -83,6 +89,8 @@ private fun SettingsScreen(onBack: () -> Unit) {
     var qEnd by remember { mutableIntStateOf(NotifRules.quietEnd(ctx)) }
     val replies = remember { mutableStateListOf<String>().apply { addAll(NotifRules.replies(ctx)) } }
     var newReply by remember { mutableStateOf("") }
+    var editIndex by remember { mutableIntStateOf(-1) }
+    var editText by remember { mutableStateOf("") }
 
     fun saveQuiet(s: Int, e: Int) { qStart = s; qEnd = e; NotifRules.setQuiet(ctx, s, e) }
     fun saveReplies() = NotifRules.setReplies(ctx, replies.toList())
@@ -133,11 +141,20 @@ private fun SettingsScreen(onBack: () -> Unit) {
 
             HubCard("Snel antwoorden", Icons.Filled.Send, HubBlue) {
                 Hint("Deze zinnen verschijnen op je horloge bij berichten waarop je kan antwoorden (WhatsApp, Messenger, sms…).")
+                Hint("Tik op een antwoord om het aan te passen. Per app aan- of uitzetten doe je bij Meldingen per app.")
+                if (replies.isEmpty()) Hint("Geen antwoorden: op het horloge verschijnen geen snelle antwoorden.")
                 replies.forEachIndexed { i, r ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(r, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
+                        Text(r, modifier = Modifier.weight(1f).clickable { editIndex = i; editText = r },
+                            style = MaterialTheme.typography.bodyLarge)
+                        IconButton(onClick = {
+                            if (i > 0) { val x = replies.removeAt(i); replies.add(i - 1, x); saveReplies() }
+                        }, enabled = i > 0) { Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Omhoog") }
+                        IconButton(onClick = { editIndex = i; editText = r }) {
+                            Icon(Icons.Filled.Edit, contentDescription = "Aanpassen")
+                        }
                         IconButton(onClick = { replies.removeAt(i); saveReplies() }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Verwijderen")
+                            Icon(Icons.Filled.Delete, contentDescription = "Verwijderen")
                         }
                     }
                 }
@@ -149,11 +166,38 @@ private fun SettingsScreen(onBack: () -> Unit) {
                     )
                     Spacer(Modifier.width(8.dp))
                     FilledTonalButton(onClick = {
-                        if (newReply.isNotBlank() && replies.size < 8) {
+                        if (newReply.isNotBlank() && replies.size < 10) {
                             replies.add(newReply.trim()); newReply = ""; saveReplies()
                         }
-                    }) { Text("Toevoegen") }
+                    }, enabled = newReply.isNotBlank() && replies.size < 10) { Text("Toevoegen") }
                 }
+                if (replies.size >= 10) Hint("Maximaal 10 antwoorden.")
+                TextButton(onClick = {
+                    replies.clear(); replies.addAll(NotifRules.DEFAULT_REPLIES); saveReplies()
+                }) { Text("Standaardantwoorden terugzetten") }
+            }
+
+            if (editIndex >= 0 && editIndex < replies.size) {
+                AlertDialog(
+                    onDismissRequest = { editIndex = -1 },
+                    title = { Text("Antwoord aanpassen") },
+                    text = {
+                        OutlinedTextField(value = editText, onValueChange = { editText = it }, singleLine = true,
+                            modifier = Modifier.fillMaxWidth())
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            if (editText.isNotBlank()) { replies[editIndex] = editText.trim(); saveReplies() }
+                            editIndex = -1
+                        }) { Text("Opslaan") }
+                    },
+                    dismissButton = {
+                        Row {
+                            TextButton(onClick = { replies.removeAt(editIndex); saveReplies(); editIndex = -1 }) { Text("Verwijderen") }
+                            TextButton(onClick = { editIndex = -1 }) { Text("Annuleren") }
+                        }
+                    }
+                )
             }
 
             HubCard {
