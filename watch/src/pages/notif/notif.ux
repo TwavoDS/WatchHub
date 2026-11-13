@@ -224,9 +224,9 @@ export default {
 
   timeUp() {
     closeTimer = null
+    // Time is up: the screen may go dark again, but the notification stays open,
+    // so it is still there when you raise your wrist. Close it with Terug or Wegtikken.
     this.screenNormal()
-    if (autoClose) this.leaveApp()
-    else this.open = false
   },
 
   closeAfterGone() {
