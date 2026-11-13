@@ -268,7 +268,13 @@ class HubNotificationService : NotificationListenerService() {
         keys.forEachIndexed { i, k -> main.postDelayed({ sendImage(k) }, delayMs + i * 900L) }
     }
 
+    private val imgSentAt = HashMap<String, Long>()
+
     private fun sendImage(key: String) {
+        // The watch may ask while the phone is already pushing it: send each picture only once per few seconds
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - (imgSentAt[key] ?: 0L) < 6000) return
+        imgSentAt[key] = now
         val make = imgSources[key] ?: run { lastInfo = "afbeelding onbekend: $key"; return }
         val img = try { make() } catch (e: Exception) { lastInfo = "afbeelding mislukt: ${e.message}"; return }
         lastInfo = "emoji-afbeelding verstuurd (${img.base64.length / 1024} kB)"

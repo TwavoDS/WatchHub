@@ -196,7 +196,7 @@ object WatchLink {
         if (appWasClosed) {
             openOnWatch(page)
             // Also send it a bit later, in case the app was already starting
-            main.postDelayed({ if (pendingGoto === goto) post(goto) }, 2500)
+            main.postDelayed({ if (pendingGoto === goto) whenReady { send(goto, quiet = true) { ok -> if (!ok) HubLog.i("goto", "app nog niet klaar, wacht op hello") } } }, 2500)
         } else {
             post(goto)
         }
@@ -279,7 +279,14 @@ object WatchLink {
                     if (msg.optInt("v") > 0) Updater.watchVersion = msg.optInt("v")
                     flushPendingGoto()
                 }
-                if (msg.optString("cmd") == "page" && msg.optString("p") != "" && msg.optString("p") != "home") pendingGoto = null
+                if (msg.optString("cmd") == "page") {
+                    // The app came to the front on some page. If the phone still wants another page, send it now.
+                    val p = msg.optString("p")
+                    val g = pendingGoto
+                    if (g != null && p.isNotEmpty()) {
+                        if (g.optString("p") == p) pendingGoto = null else flushPendingGoto()
+                    }
+                }
                 handlers[msg.optString("cmd")]?.invoke(msg)
             }
         }
@@ -339,14 +346,14 @@ object WatchLink {
     /** Sends a message to the watch app, connecting first if needed. */
     fun post(obj: JSONObject) = whenReady { send(obj) }
 
-    private fun send(obj: JSONObject, onDone: ((Boolean) -> Unit)? = null) {
+    private fun send(obj: JSONObject, quiet: Boolean = false, onDone: ((Boolean) -> Unit)? = null) {
         val id = nodeId
         if (id == null || !permissionOk) { onDone?.invoke(false); return }
         messageApi.sendMessage(id, obj.toString().toByteArray(Charsets.UTF_8))
             .addOnSuccessListener { main.post { onDone?.invoke(true) } }
             .addOnFailureListener { e ->
                 main.post {
-                    lastError = "versturen: ${e.message}"
+                    if (!quiet) lastError = "versturen: ${e.message}"
                     onDone?.invoke(false)
                 }
             }

@@ -1,3 +1,9 @@
+## Telefoon 2.0.1 · Horloge 1.8.1
+- Navigatie en camera openen nu ook de juiste pagina als WatchHub op het horloge nog open stond (bv. met een oude melding). Gevonden dankzij je logboek.
+- Camera op de telefoon openen springt op het horloge naar de camera.
+- Emoji-afbeeldingen worden niet meer dubbel verstuurd (sneller, minder batterij).
+- Geen valse foutmelding meer in het logboek bij het openen van de app.
+
 ## Telefoon 2.0.0 · Horloge 1.8.0
 - Nieuw: Testen en logboek. Per functie een testknop en een vinkje, en een logboek van telefoon en horloge dat je met één knop deelt.
 - Nieuw: "Wat is nieuw" na elke update, en bij de updateknop zie je wat er verandert vóór je installeert.

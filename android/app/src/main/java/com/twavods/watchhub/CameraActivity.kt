@@ -106,7 +106,7 @@ class CameraActivity : ComponentActivity(), WatchLink.Source {
         ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
 
         if (!WatchLink.permissionOk) WatchLink.connect()
-        WatchLink.openOnWatch(WatchLink.PAGE_CAMERA)
+        WatchLink.gotoOnWatch(org.json.JSONObject().put("t", "goto").put("p", "camera"), appWasClosed = true)
         tick()
     }
 
@@ -187,7 +187,7 @@ class CameraActivity : ComponentActivity(), WatchLink.Source {
             setBackgroundColor(0xCC000000.toInt())
             setPadding(32, 24, 32, 24)
             addView(statusView)
-            addView(row(button("Verbinden") { WatchLink.connect() }, button("Open op horloge") { WatchLink.openOnWatch(WatchLink.PAGE_CAMERA) }))
+            addView(row(button("Verbinden") { WatchLink.connect() }, button("Open op horloge") { WatchLink.gotoOnWatch(org.json.JSONObject().put("t", "goto").put("p", "camera"), appWasClosed = true) }))
             addView(row(xiaomiBtn, tapBtn))
             addView(slider("Uitsnede Xiaomi-camera (hoogte)", Prefs.cropTop(this@CameraActivity), 0f, 0.6f) {
                 Prefs.setCropTop(this@CameraActivity, it)

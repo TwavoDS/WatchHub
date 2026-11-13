@@ -119,10 +119,18 @@ function onMessage(raw) {
         requestIcon(n.pkg)
         state.openId = n.id
       }
-      if ((state.page === '' || state.page === 'home') && msg.p) {
+      if (msg.p && state.page !== msg.p) {
+        // Also when the app was still open on another page (e.g. an old notification):
+        // the phone asked for this page, so go there
+        const fromStart = state.page === '' || state.page === 'home'
+        state.autoClose = fromStart   // opened by the phone: close the app again after the display time
+        const uri = '/pages/' + msg.p
+        log('I', 'ga naar ' + msg.p + ' (was ' + (state.page || 'dicht') + ')')
         state.page = msg.p
-        state.autoClose = true   // opened by the phone: close the app again after the display time
-        try { router.push({ uri: '/pages/' + msg.p }) } catch (e) { log('E', 'pagina openen mislukt: ' + e.message) }
+        try {
+          if (fromStart) router.push({ uri: uri })
+          else router.replace({ uri: uri })
+        } catch (e) { log('E', 'pagina openen mislukt: ' + e.message) }
       } else if (n) {
         emit(n)
       }
@@ -233,7 +241,7 @@ export function log(level, msg) {
 }
 
 // Keep equal to versionCode in manifest.json: the phone uses it to offer updates
-export const VERSION = 13
+export const VERSION = 14
 
 export function send(obj, onFail) {
   if (obj && obj.cmd === 'hello') obj.v = VERSION
