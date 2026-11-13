@@ -132,7 +132,7 @@ private fun SettingsScreen(onBack: () -> Unit) {
             }
 
             HubCard("Snel antwoorden", Icons.Filled.Send, HubBlue) {
-                Hint("Emoji kan het horloge niet tonen. Deze zinnen verschijnen op je horloge bij berichten waarop je kan antwoorden (WhatsApp, Messenger, sms…).")
+                Hint("Deze zinnen verschijnen op je horloge bij berichten waarop je kan antwoorden (WhatsApp, Messenger, sms…).")
                 replies.forEachIndexed { i, r ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(r, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)

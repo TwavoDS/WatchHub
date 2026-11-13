@@ -84,12 +84,12 @@ class NavHandler(private val ctx: Context) {
 
         if (!navigating) {
             navigating = true
-            WatchLink.openOnWatch(WatchLink.PAGE_NAV)
-            // The watch opens on its start page; tell it to go to the navigation screen
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                WatchLink.post(JSONObject().put("t", "goto").put("p", "nav"))
-                resendFull()
-            }, 2000)
+            // The watch opens on its start page; it is told to go to the navigation screen
+            val page = HubNotificationService.watchPage
+            if (page != "nav" && page != "camera") {
+                WatchLink.gotoOnWatch(JSONObject().put("t", "goto").put("p", "nav"), appWasClosed = page.isEmpty())
+            }
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ resendFull() }, 3000)
         }
 
         // Google Maps updates very often; skip identical updates

@@ -178,6 +178,34 @@ object WatchLink {
             }
     }
 
+    // ---- Opening a page on the watch -------------------------------------------
+    // The watch always starts on its menu page, whatever page we ask for. So we also
+    // keep a "goto" for a short while and hand it over as soon as the app says hello.
+
+    private var pendingGoto: JSONObject? = null
+    private var pendingAt = 0L
+
+    /** Opens the watch app and makes it jump to [goto] ({"t":"goto","p":"nav"|"notif",...}). */
+    fun gotoOnWatch(goto: JSONObject, appWasClosed: Boolean) {
+        pendingGoto = goto
+        pendingAt = android.os.SystemClock.elapsedRealtime()
+        val page = "/pages/" + goto.optString("p")
+        if (appWasClosed) {
+            openOnWatch(page)
+            // Also send it a bit later, in case the app was already starting
+            main.postDelayed({ if (pendingGoto === goto) post(goto) }, 2500)
+        } else {
+            post(goto)
+        }
+    }
+
+    private fun flushPendingGoto() {
+        val g = pendingGoto ?: return
+        val age = android.os.SystemClock.elapsedRealtime() - pendingAt
+        pendingGoto = null
+        if (age < 30_000) send(g)
+    }
+
     /** Result of the last attempt to open the watch app, shown in the phone app. */
     var lastLaunch = ""
 
@@ -239,7 +267,11 @@ object WatchLink {
             "ack" -> { inFlight.remove(msg.optInt("s")); sendNextFrame() }
             "shutter" -> shutter()
             "switch" -> source?.switchCamera()
-            else -> handlers[msg.optString("cmd")]?.invoke(msg)
+            else -> {
+                if (msg.optString("cmd") == "hello") flushPendingGoto()
+                if (msg.optString("cmd") == "page" && msg.optString("p") != "" && msg.optString("p") != "home") pendingGoto = null
+                handlers[msg.optString("cmd")]?.invoke(msg)
+            }
         }
     }
 

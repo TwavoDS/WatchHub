@@ -242,11 +242,9 @@ class HubNotificationService : NotificationListenerService() {
         // WatchHub screen: open it with this notification in it, unless the watch is busy
         // with camera or navigation (then it only buzzes and shows a short banner)
         if (watchPage.isEmpty() || watchPage == "home") {
-            val wasClosed = watchPage.isEmpty()
-            WatchLink.openOnWatch(WatchLink.PAGE_NOTIF)
             // The notification travels inside the "goto", so the screen never shows an older one first
             val goto = JSONObject().put("t", "goto").put("p", "notif").put("n", json)
-            if (wasClosed) main.postDelayed({ WatchLink.post(goto) }, 1800) else WatchLink.post(goto)
+            WatchLink.gotoOnWatch(goto, appWasClosed = watchPage.isEmpty())
         } else {
             WatchLink.post(json)
         }
@@ -345,7 +343,7 @@ class HubNotificationService : NotificationListenerService() {
     fun sendTest(pkg: String) {
         val rule = NotifRules.get(this, pkg)
         val id = nextNumber()
-        val json = baseJson(id, pkg, "Testmelding", "Zo ziet een melding van ${appLabel(pkg)} eruit op je horloge.",
+        val json = baseJson(id, pkg, "Testmelding 👋", "Zo ziet een melding van ${appLabel(pkg)} eruit op je horloge. Emoji-test: 😀 👍 ❤️ 🎉",
             rule.color, rule.vib, System.currentTimeMillis())
             .put("quiet", false)
             .put("dur", rule.duration)

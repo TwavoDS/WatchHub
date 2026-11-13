@@ -19,34 +19,40 @@
       </list>
     </div>
 
-    <!-- One notification -->
-    <div if="{{open}}" class="detail">
-      <scroll class="detail-scroll" scroll-y="true">
-        <div class="detail-inner" onclick="keepOpen">
-          <image if="{{cur.icon}}" class="big-icon" src="{{cur.icon}}"></image>
-          <text class="d-app" style="color: {{cur.color}};">{{cur.call ? 'Oproep' : cur.app}} · {{cur.time}}</text>
-          <text class="{{cur.call ? 'd-caller' : 'd-title'}}">{{cur.title}}</text>
-          <text if="{{cur.text}}" class="d-text">{{cur.text}}</text>
+    <!-- One notification: a list, because that is what scrolls reliably on the watch -->
+    <list if="{{open}}" class="detail" onclick="keepOpen">
+      <list-item type="head" class="li-head">
+        <image if="{{cur.icon}}" class="big-icon" src="{{cur.icon}}"></image>
+        <text class="d-app" style="color: {{cur.color}};">{{cur.call ? 'Oproep' : cur.app}} · {{cur.time}}</text>
+      </list-item>
+      <list-item type="title" class="li-text">
+        <text class="{{cur.call ? 'd-caller' : 'd-title'}}">{{cur.title}}</text>
+      </list-item>
+      <list-item if="{{cur.text}}" type="body" class="li-text">
+        <text class="d-text">{{cur.text}}</text>
+      </list-item>
 
-          <!-- Buttons of the notification (e.g. Opnemen / Weigeren / Markeren als gelezen) -->
-          <div for="{{cur.actions}}" class="act-row">
-            <text class="act {{$item.cls}}" onclick="doAction($item.i)">{{$item.title}}</text>
-          </div>
+      <!-- Buttons of the notification (e.g. Opnemen / Weigeren / Markeren als gelezen) -->
+      <list-item for="{{cur.actions}}" type="action" class="li-btn">
+        <text class="act {{$item.cls}}" onclick="doAction($item.i)">{{$item.title}}</text>
+      </list-item>
 
-          <!-- Quick replies -->
-          <text if="{{cur.replies.length > 0}}" class="section">Snel antwoorden</text>
-          <div for="{{cur.replies}}" class="act-row">
-            <text class="reply" onclick="doReply($item)">{{$item}}</text>
-          </div>
+      <!-- Quick replies -->
+      <list-item if="{{cur.replies.length > 0}}" type="section" class="li-section">
+        <text class="section">Snel antwoorden</text>
+      </list-item>
+      <list-item for="{{cur.replies}}" type="reply" class="li-btn">
+        <text class="reply" onclick="doReply($item)">{{$item}}</text>
+      </list-item>
 
-          <div class="buttons">
-            <text class="btn btn-back" onclick="closeItem">Terug</text>
-            <text if="{{!cur.call}}" class="btn btn-done" style="background-color: {{cur.color}};" onclick="dismissCur">Wegtikken</text>
-          </div>
-          <text if="{{sent}}" class="sent">{{sent}}</text>
-        </div>
-      </scroll>
-    </div>
+      <list-item type="buttons" class="li-buttons">
+        <text class="btn btn-back" onclick="closeItem">Terug</text>
+        <text if="{{!cur.call}}" class="btn btn-done" style="background-color: {{cur.color}};" onclick="dismissCur">Wegtikken</text>
+      </list-item>
+      <list-item type="foot" class="li-foot">
+        <text if="{{sent}}" class="sent">{{sent}}</text>
+      </list-item>
+    </list>
   </div>
 </template>
 
@@ -297,16 +303,41 @@ export default {
   width: 480px;
   height: 480px;
 }
-.detail-scroll {
-  width: 480px;
-  height: 480px;
-}
-/* Inside a scroll area every child needs a fixed size, or it gets squeezed */
-.detail-inner {
+.li-head {
   width: 480px;
   flex-direction: column;
   align-items: center;
-  padding: 44px 0 110px 0;
+  padding-top: 40px;
+}
+.li-text {
+  width: 480px;
+  justify-content: center;
+  padding: 4px 0;
+}
+.li-section {
+  width: 480px;
+  height: 44px;
+  justify-content: center;
+  align-items: flex-end;
+}
+.li-btn {
+  width: 480px;
+  height: 66px;
+  justify-content: center;
+  align-items: center;
+}
+.li-buttons {
+  width: 480px;
+  height: 84px;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  margin-top: 6px;
+}
+.li-foot {
+  width: 480px;
+  height: 110px;
+  justify-content: center;
 }
 .big-icon {
   width: 64px;
@@ -356,13 +387,6 @@ export default {
   color: #888888;
   margin-top: 18px;
 }
-.act-row {
-  width: 340px;
-  height: 66px;
-  flex-shrink: 0;
-  justify-content: center;
-  align-items: center;
-}
 .act {
   width: 300px;
   height: 56px;
@@ -386,13 +410,6 @@ export default {
   text-align: center;
   border-radius: 26px;
   background-color: #263238;
-}
-.buttons {
-  height: 76px;
-  flex-shrink: 0;
-  flex-direction: row;
-  align-items: center;
-  margin-top: 14px;
 }
 .btn {
   height: 56px;
