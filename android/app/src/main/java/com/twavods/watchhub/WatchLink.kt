@@ -75,7 +75,8 @@ object WatchLink {
 
     var nodeId: String? = null; private set
     var nodeName: String = ""; private set
-    var linkState = "Horloge zoeken…"; private set
+    var linkState = "Horloge zoeken…"
+        private set(v) { if (v != field) HubLog.i("link", v); field = v }
     var permissionOk = false; private set
 
     // Streaming state (main thread only)
@@ -92,6 +93,7 @@ object WatchLink {
     var photosTaken = 0; private set
     var fps = 0.0; private set
     var lastError = ""
+        set(v) { if (v.isNotEmpty() && v != field) HubLog.e("link", v); field = v }
     /** true: fill the round screen; false: show the whole picture. Chosen on the watch. */
     @Volatile var fillMode = true
 
@@ -190,6 +192,7 @@ object WatchLink {
         pendingGoto = goto
         pendingAt = android.os.SystemClock.elapsedRealtime()
         val page = "/pages/" + goto.optString("p")
+        HubLog.i("goto", "${goto.optString("p")} (app ${if (appWasClosed) "dicht" else "open"})")
         if (appWasClosed) {
             openOnWatch(page)
             // Also send it a bit later, in case the app was already starting
@@ -203,11 +206,12 @@ object WatchLink {
         val g = pendingGoto ?: return
         val age = android.os.SystemClock.elapsedRealtime() - pendingAt
         pendingGoto = null
-        if (age < 30_000) send(g)
+        if (age < 30_000) send(g) else HubLog.w("goto", "te laat (${age / 1000}s), niet meer getoond")
     }
 
     /** Result of the last attempt to open the watch app, shown in the phone app. */
     var lastLaunch = ""
+        set(v) { if (v.contains("mislukt") || v.contains("niet")) HubLog.e("openen", v) else HubLog.i("openen", v); field = v }
 
     fun openOnWatch(page: String = PAGE_HOME) {
         val id = nodeId
@@ -247,7 +251,10 @@ object WatchLink {
                 else -> return
             }
         } catch (_: Exception) { lastError = "onbekend bericht: ${text.take(60)}"; return }
-        when (msg.optString("cmd")) {
+        val cmd = msg.optString("cmd")
+        if (cmd != "ack" && cmd != "log") HubLog.i("horloge→", if (cmd == "page") "page ${msg.optString("p")}" else cmd)
+        if (cmd == "log") HubLog.add2("horloge", msg.optString("l", "I"), msg.optString("m"))
+        when (cmd) {
             "start" -> {
                 val wantMap = msg.optString("src") == "map"
                 val src = if (wantMap) mapSource else source

@@ -122,7 +122,7 @@ function onMessage(raw) {
       if ((state.page === '' || state.page === 'home') && msg.p) {
         state.page = msg.p
         state.autoClose = true   // opened by the phone: close the app again after the display time
-        router.push({ uri: '/pages/' + msg.p })
+        try { router.push({ uri: '/pages/' + msg.p }) } catch (e) { log('E', 'pagina openen mislukt: ' + e.message) }
       } else if (n) {
         emit(n)
       }
@@ -149,7 +149,8 @@ function saveIcon(pkg, b64) {
     success: () => {
       state.icons[pkg] = uri
       emit({ t: 'iconReady', pkg: pkg })
-    }
+    },
+    fail: (d, code) => log('E', 'icoon opslaan mislukt (' + code + ')')
   })
 }
 
@@ -161,7 +162,7 @@ function imgPart(m) {
   if (p.got < p.n) return
   delete state.imgParts[m.k]
   let bytes
-  try { bytes = b64ToBytes(p.parts.join('')) } catch (e) { return }
+  try { bytes = b64ToBytes(p.parts.join('')) } catch (e) { log('E', 'afbeelding ' + m.k + ' kapot: ' + e.message); return }
   const uri = 'internal://cache/t_' + m.k + '_' + Date.now() + '.png'
   file.writeArrayBuffer({
     uri: uri,
@@ -171,7 +172,8 @@ function imgPart(m) {
       if (old) { try { file.delete({ uri: old.uri }) } catch (e) {} }
       state.imgs[m.k] = { uri: uri, h: m.h, w: m.w }
       emit({ t: 'imgReady', k: m.k })
-    }
+    },
+    fail: (d, code) => log('E', 'afbeelding opslaan mislukt (' + code + ')')
   })
 }
 
@@ -201,6 +203,10 @@ export function connect() {
   conn.onmessage = (data) => onMessage(data && data.data)
   conn.onopen = () => {
     state.open = true
+    if (failedSends.length) {
+      log('W', 'niet verstuurd zonder verbinding: ' + failedSends.slice(-10).join(', '))
+      failedSends = []
+    }
     send({ cmd: 'hello' })
     if (state.page) send({ cmd: 'page', p: state.page })
     // Ask again for pictures that didn't arrive while the link was down
@@ -208,15 +214,26 @@ export function connect() {
     emit({ t: 'imgRetry' })
     emit({ t: 'linkOpen' })
   }
-  conn.onclose = (d) => { state.open = false; emit({ t: 'linkClosed', code: d && d.code }) }
-  conn.onerror = (d) => emit({ t: 'linkError', code: d && d.code })
+  conn.onclose = (d) => { state.open = false; failedSends.push('closed:' + (d && d.code)); emit({ t: 'linkClosed', code: d && d.code }) }
+  conn.onerror = (d) => { failedSends.push('error:' + (d && d.code)); emit({ t: 'linkError', code: d && d.code }) }
   state.conn = conn
   return conn
 }
 
 /** Sends a message to the phone; onFail(text) is called when it could not be sent. */
+// Sends that failed while the link was down; reported to the phone's log once it is back
+let failedSends = []
+
+/** Writes a line to the phone's log (Logboek in the WatchHub phone app). */
+export function log(level, msg) {
+  try {
+    const conn = connect()
+    conn.send({ data: { cmd: 'log', l: level, m: String(msg).slice(0, 300) } })
+  } catch (e) {}
+}
+
 // Keep equal to versionCode in manifest.json: the phone uses it to offer updates
-export const VERSION = 12
+export const VERSION = 13
 
 export function send(obj, onFail) {
   if (obj && obj.cmd === 'hello') obj.v = VERSION
@@ -224,6 +241,7 @@ export function send(obj, onFail) {
   conn.send({
     data: obj,
     fail: (d, code) => {
+      if (obj && obj.cmd !== 'log' && obj.cmd !== 'ack') failedSends.push(obj.cmd + ':' + code)
       if (!onFail) return
       let info = code
       if (info === undefined) { try { info = JSON.stringify(d) } catch (e) { info = String(d) } }

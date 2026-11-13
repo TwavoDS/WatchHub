@@ -27,12 +27,15 @@ object Updater {
     const val WEAR_PKG = "com.xiaomi.wearable"
 
     @Volatile var status = ""
+        set(v) { if (v != field) { if (v.startsWith("Mislukt")) HubLog.e("update", v) else HubLog.i("update", v) }; field = v }
     @Volatile var busy = false
     @Volatile var latestPhone = 0
     @Volatile var latestPhoneName = ""
     @Volatile var latestWatch = 0
     @Volatile var latestWatchName = ""
     @Volatile var checked = false
+    /** Notes of the newest version on GitHub (first section of changelog.txt). */
+    @Volatile var latestNotes = ""
     /** Version of the app on the watch, as it reported in its "hello" (0 = unknown). */
     @Volatile var watchVersion = 0
 
@@ -98,6 +101,9 @@ object Updater {
             latestPhoneName = j.optString("phoneName")
             latestWatch = j.optInt("watch")
             latestWatchName = j.optString("watchName")
+            latestNotes = try {
+                val c = File(app.cacheDir, "updates/changelog.txt"); download("changelog.txt", c); firstSection(c.readText())
+            } catch (_: Exception) { "" }
             checked = true
             status = when {
                 phoneUpdate(app) && watchUpdate() -> "Nieuwe versies voor telefoon en horloge"
@@ -107,6 +113,17 @@ object Updater {
             }
         }
     }
+
+    /** The first "## …" block of a changelog, without its title line. */
+    fun firstSection(all: String): String {
+        val parts = all.split(Regex("(?m)^## ")).filter { it.isNotBlank() }
+        return parts.firstOrNull()?.trim().orEmpty()
+    }
+
+    /** Notes bundled with this app version. */
+    fun ownNotes(ctx: Context): String = try {
+        firstSection(ctx.assets.open("changelog.txt").bufferedReader().readText())
+    } catch (_: Exception) { "" }
 
     /** Android must allow WatchHub to install apps; otherwise opens that setting. */
     fun canInstall(ctx: Context): Boolean =

@@ -29,6 +29,7 @@
     </queries>
 
     <application
+        android:name=".HubApp"
         android:allowBackup="false"
         android:icon="@android:drawable/ic_menu_camera"
         android:label="WatchHub"
@@ -44,6 +45,8 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <activity android:name=".DiagActivity" android:exported="false" />
 
         <activity
             android:name=".MainActivity"

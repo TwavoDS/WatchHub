@@ -44,6 +44,12 @@ class HubNotificationService : NotificationListenerService() {
         @Volatile var connected = false; private set
         @Volatile var forwarded = 0; private set
         @Volatile var lastInfo = ""
+            set(v) {
+                if (v.isNotEmpty() && v != field) {
+                    if (v.contains("mislukt") || v.contains("onbekend")) HubLog.e("melding", v) else HubLog.i("melding", v)
+                }
+                field = v
+            }
         /** Which page the watch app shows right now ("" = closed). */
         @Volatile var watchPage = ""
         private const val ICON_SIZE = 72
@@ -411,6 +417,22 @@ class HubNotificationService : NotificationListenerService() {
             .put("replies", if (rule.replies) JSONArray(NotifRules.replies(this)) else JSONArray())
         remember(Item(id, "test:$id", json, rule, emptyList(), null))
         deliver(json, rule, quiet = false, reminder = false)
+    }
+
+    /** Pretend call (for the test screen): shows the call screen with two dummy buttons. */
+    fun sendTestCall() {
+        val id = nextNumber()
+        val json = baseJson(id, packageName, "Testoproep", "Dit is een test, er belt niemand", "#66BB6A", "LLL",
+            System.currentTimeMillis())
+            .put("quiet", false).put("dur", 0).put("call", true)
+            .put("actions", JSONArray()
+                .put(JSONObject().put("i", 0).put("title", "Opnemen"))
+                .put(JSONObject().put("i", 1).put("title", "Weigeren")))
+            .put("replies", JSONArray())
+        val rule = AppRule(enabled = true, vib = "LLL", color = "#66BB6A", duration = 0, display = "screen")
+        remember(Item(id, "test:$id", json, rule, emptyList(), null))
+        deliver(json, rule, quiet = false, reminder = false)
+        HubLog.i("test", "testoproep verstuurd")
     }
 
     fun appLabel(pkg: String): String = try {

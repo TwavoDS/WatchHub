@@ -53,6 +53,7 @@ jobs:
           WV=$(grep -oP '"versionCode": \K[0-9]+' watch/src/manifest.json)
           WN=$(grep -oP '"versionName": "\K[^"]+' watch/src/manifest.json)
           echo "{\"phone\":$PV,\"phoneName\":\"$PN\",\"watch\":$WV,\"watchName\":\"$WN\"}" > out/version.json
+          cp android/app/src/main/assets/changelog.txt out/changelog.txt
           cat out/version.json
           ls -la out
 

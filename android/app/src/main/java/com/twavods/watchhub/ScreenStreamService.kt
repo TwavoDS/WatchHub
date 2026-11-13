@@ -46,6 +46,7 @@ class ScreenStreamService : Service(), WatchLink.Source {
             private set
         fun runningFor(t: String) = running && target == t
         @Volatile var lastError = ""
+            set(v) { if (v.isNotEmpty() && v != field) HubLog.e("scherm", v); field = v }
     }
 
     private var projection: MediaProjection? = null

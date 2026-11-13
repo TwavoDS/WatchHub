@@ -31,6 +31,10 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -121,8 +125,33 @@ private fun MapControls() {
 }
 
 @Composable
+private fun WhatsNew() {
+    val ctx = LocalContext.current
+    val prefs = ctx.getSharedPreferences("watchhub_ui", Context.MODE_PRIVATE)
+    val version = Updater.phoneVersion(ctx)
+    var show by remember { mutableStateOf(prefs.getInt("seenVersion", 0) < version) }
+    if (!show) return
+    val notes = remember { Updater.ownNotes(ctx) }
+    AlertDialog(
+        onDismissRequest = { show = false; prefs.edit().putInt("seenVersion", version).apply() },
+        title = { Text("Wat is nieuw") },
+        text = { Text(notes.ifEmpty { "Versie ${Updater.phoneVersionName(ctx)}" }) },
+        confirmButton = {
+            TextButton(onClick = { show = false; prefs.edit().putInt("seenVersion", version).apply() }) { Text("Oké") }
+        },
+        dismissButton = {
+            TextButton(onClick = {
+                show = false; prefs.edit().putInt("seenVersion", version).apply()
+                ctx.startActivity(Intent(ctx, DiagActivity::class.java))
+            }) { Text("Testlijst") }
+        }
+    )
+}
+
+@Composable
 private fun HomeScreen() {
     val ctx = LocalContext.current
+    WhatsNew()
     val tick = rememberTicker()
 
     // Read inside the composition so it refreshes every tick
@@ -208,6 +237,11 @@ private fun HomeScreen() {
 
             UpdateCard()
 
+            HubCard("Testen en logboek", Icons.Filled.Build, if (HubLog.errorCount() > 0) HubOrange else HubBlue) {
+                Hint("Per functie een testknop, en het logboek om fouten door te sturen.")
+                FilledTonalButton(onClick = { ctx.startActivity(Intent(ctx, DiagActivity::class.java)) }) { Text("Openen") }
+            }
+
             HubCard("Horloge en toegang", Icons.Filled.Settings, HubBlue) {
                 StatusLine(access && HubNotificationService.connected,
                     when {
@@ -242,6 +276,10 @@ private fun UpdateCard() {
         Hint("Horloge: " + (if (Updater.watchVersion > 0) "versie ${Updater.watchVersion}" else "onbekend (open WatchHub op je horloge)") +
             (if (watchNew) "  →  nieuw: ${Updater.latestWatchName}" else ""))
         if (Updater.status.isNotEmpty()) StatusLine(!Updater.status.startsWith("Mislukt"), Updater.status)
+        if ((phoneNew || watchNew) && Updater.latestNotes.isNotEmpty()) {
+            Text("Wat is nieuw", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Hint(Updater.latestNotes)
+        }
         if (phoneNew) {
             Button(onClick = { Updater.updatePhone(ctx) }, enabled = !Updater.busy) { Text("Telefoonapp bijwerken") }
         }
