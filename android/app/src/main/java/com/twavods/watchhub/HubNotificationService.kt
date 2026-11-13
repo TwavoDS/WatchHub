@@ -131,10 +131,14 @@ class HubNotificationService : NotificationListenerService() {
         forwarded++
         lastInfo = "doorgestuurd: ${appLabel(sbn.packageName)}"
         // Open the notification screen, unless the watch is busy with camera or navigation
-        if (watchPage != "camera" && watchPage != "nav" && watchPage != "notif") {
+        if (watchPage.isEmpty() || watchPage == "home") {
+            val wasClosed = watchPage.isEmpty()
             WatchLink.openOnWatch(WatchLink.PAGE_NOTIF)
+            // Give a closed watch app a moment to start, so it gets (and vibrates for) the message
+            if (wasClosed) main.postDelayed({ WatchLink.post(json) }, 2000) else WatchLink.post(json)
+        } else {
+            WatchLink.post(json)
         }
-        WatchLink.post(json)
         if (!quiet) scheduleRepeat(id, rule)
     }
 
@@ -218,8 +222,11 @@ class HubNotificationService : NotificationListenerService() {
             .put("time", android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date()))
             .put("quiet", false)
         items[id] = Item(id, "test:$id", json, rule)
-        if (watchPage != "notif") WatchLink.openOnWatch(WatchLink.PAGE_NOTIF)
-        WatchLink.post(json)
+        if (watchPage.isEmpty() || watchPage == "home") {
+            val wasClosed = watchPage.isEmpty()
+            WatchLink.openOnWatch(WatchLink.PAGE_NOTIF)
+            if (wasClosed) main.postDelayed({ WatchLink.post(json) }, 2000) else WatchLink.post(json)
+        } else WatchLink.post(json)
     }
 
     private fun appLabel(pkg: String): String = try {

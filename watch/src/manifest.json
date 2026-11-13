@@ -1,8 +1,8 @@
 {
   "package": "com.twavods.watchhub",
-  "name": "WatchCam",
-  "versionName": "1.6.2",
-  "versionCode": 14,
+  "name": "WatchHub",
+  "versionName": "1.0.0",
+  "versionCode": 1,
   "minPlatformVersion": 1000,
   "icon": "/common/logo.png",
   "deviceTypeList": [
@@ -37,6 +37,15 @@
     "pages": {
       "pages/index": {
         "component": "index"
+      },
+      "pages/camera": {
+        "component": "camera"
+      },
+      "pages/nav": {
+        "component": "nav"
+      },
+      "pages/notif": {
+        "component": "notif"
       }
     }
   }

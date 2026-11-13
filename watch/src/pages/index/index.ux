@@ -1,394 +1,61 @@
 <template>
   <div class="root">
-    <!-- Live preview from the phone camera -->
-    <!-- Two pages: "Vol" and "Heel". Turning the crown (or swiping up/down) switches -->
-    <swiper class="pager" vertical="true" indicator="false" loop="false"
-            index="{{fit ? 1 : 0}}" onchange="onPage">
-      <div class="page">
-        <image if="{{frameUri && !fit}}" class="preview" src="{{frameUri}}"></image>
-      </div>
-      <div class="page">
-        <image if="{{frameUri && fit}}" class="preview" src="{{frameUri}}"></image>
-      </div>
-    </swiper>
-    <div if="{{!frameUri}}" class="placeholder">
-      <text class="placeholder-title">WatchCam</text>
-      <text class="placeholder-text">{{status}}</text>
-      <text class="dbg">{{dbg}}</text>
+    <text class="title">WatchHub</text>
+    <text class="status">{{status}}</text>
+
+    <div class="item" onclick="goCamera">
+      <div class="dot dot-cam"></div>
+      <text class="label">Camera</text>
     </div>
-
-    <!-- Display mode: fill the screen, or show the whole picture -->
-    <div class="mode-wrap">
-      <text class="mode-btn" onclick="toggleMode">{{fit ? 'Heel' : 'Vol'}}</text>
+    <div class="item" onclick="goNav">
+      <div class="dot dot-nav"></div>
+      <text class="label">Navigatie</text>
     </div>
-
-    <!-- Status line on top of the preview -->
-    <div class="top">
-      <text if="{{frameUri && status}}" class="status">{{status}}</text>
-    </div>
-
-    <!-- Countdown overlay -->
-    <div if="{{countdown > 0}}" class="countdown-wrap">
-      <text class="countdown">{{countdown}}</text>
-    </div>
-
-    <!-- Flash after a photo -->
-    <div if="{{flash}}" class="flash"></div>
-
-    <!-- Controls -->
-    <div class="controls">
-      <text class="small-btn" onclick="toggleTimer">{{timerLabel}}</text>
-      <div class="shutter-outer" onclick="onShutter">
-        <div class="shutter-inner {{busy ? 'shutter-busy' : ''}}"></div>
-      </div>
-      <text class="small-btn" onclick="switchCamera">Cam</text>
+    <div class="item" onclick="goNotif">
+      <div class="dot dot-notif"></div>
+      <text class="label">Meldingen</text>
+      <text if="{{count > 0}}" class="badge">{{count}}</text>
     </div>
   </div>
 </template>
 
 <script>
-import interconnect from '@system.interconnect'
-import file from '@system.file'
-import storage from '@system.storage'
-import brightness from '@system.brightness'
-import vibrator from '@system.vibrator'
+import router from '@system.router'
+import * as link from '../../common/link.js'
 
-const TIMERS = [0, 3, 10]
-const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-const DIAG = { 0: 'verbonden', 204: 'time-out', 1000: 'andere fout', 1001: 'telefoon-app ontbreekt' }
-
-// Non-reactive runtime state
-const S = {
-  conn: null,
-  open: false,
-  visible: false,
-  frameNo: 0,
-  seq: -1,
-  chunks: [],
-  got: 0,
-  countdownTimer: null,
-  startTimer: null,
-  lastFrameAt: 0,
-  writing: false,
-  prevUri: ''
-}
-
-let B64_LOOKUP = null
-function b64ToArrayBuffer(s) {
-  if (!B64_LOOKUP) {
-    B64_LOOKUP = new Uint8Array(256)
-    for (let i = 0; i < B64.length; i++) B64_LOOKUP[B64.charCodeAt(i)] = i
-  }
-  const len = s.length
-  let out = (len * 3) / 4
-  if (s[len - 1] === '=') out--
-  if (s[len - 2] === '=') out--
-  const buf = new ArrayBuffer(out)
-  const v = new Uint8Array(buf)
-  let p = 0
-  for (let i = 0; i < len; i += 4) {
-    const a = B64_LOOKUP[s.charCodeAt(i)]
-    const b = B64_LOOKUP[s.charCodeAt(i + 1)]
-    const c = B64_LOOKUP[s.charCodeAt(i + 2)]
-    const d = B64_LOOKUP[s.charCodeAt(i + 3)]
-    v[p++] = (a << 2) | (b >> 4)
-    if (p < out) v[p++] = ((b & 15) << 4) | (c >> 2)
-    if (p < out) v[p++] = ((c & 3) << 6) | d
-  }
-  return buf
-}
+let unlisten = null
 
 export default {
   private: {
-    frameUri: '',
-    status: 'Verbinden met telefoon…',
-    countdown: 0,
-    flash: false,
-    busy: false,
-    timerIndex: 0,
-    timerLabel: '0s',
-    fit: false,
-    dbg: ''
-  },
-
-  onInit() {
-    storage.get({
-      key: 'mode',
-      success: (v) => { this.fit = v === 'fit' }
-    })
-    file.list({
-      uri: 'internal://cache',
-      success: (d) => {
-        (d.fileList || []).forEach((f) => {
-          const name = String(f.uri || '').split('/').pop()
-          if (/^f\d+\.jpg$/.test(name)) file.delete({ uri: 'internal://cache/' + name })
-        })
-      }
-    })
-    storage.get({
-      key: 'timerIndex',
-      success: (v) => {
-        const i = parseInt(v, 10)
-        if (i >= 0 && i < TIMERS.length) this.setTimer(i)
-      }
-    })
+    status: 'Verbinden…',
+    count: 0
   },
 
   onShow() {
-    S.visible = true
-    try { brightness.setKeepScreenOn({ keepScreenOn: true }) } catch (e) {}
-    this.connect()
+    link.bind(this.$app)
+    unlisten = link.listen((m) => this.onMessage(m))
+    link.setPage('home')
+    link.send({ cmd: 'hello' }, (info) => {
+      this.status = 'Geen verbinding met telefoon (' + info.substring(0, 30) + ')'
+    })
+    link.sync()
+    this.count = link.notifs().length
   },
 
   onHide() {
-    S.visible = false
-    this.sendCmd({ cmd: 'stop' })
-    if (S.startTimer) { clearInterval(S.startTimer); S.startTimer = null }
+    if (unlisten) { unlisten(); unlisten = null }
   },
 
-  onDestroy() {
-    S.visible = false
-    this.sendCmd({ cmd: 'stop' })
-    if (S.startTimer) clearInterval(S.startTimer)
-    if (S.countdownTimer) clearInterval(S.countdownTimer)
-    if (S.conn) {
-      S.conn.onmessage = null
-      S.conn.onopen = null
-      S.conn.onclose = null
-      S.conn.onerror = null
+  onMessage(m) {
+    if (m.t === 'linkOpen' || m.t === 'list' || m.t === 'notif' || m.t === 'gone' || m.t === 'hello') {
+      this.status = 'Verbonden met telefoon'
     }
-    try { brightness.setKeepScreenOn({ keepScreenOn: false }) } catch (e) {}
+    this.count = link.notifs().length
   },
 
-  // ---- Connection --------------------------------------------------------
-
-  connect() {
-    if (!S.conn) {
-      S.conn = interconnect.instance()
-      S.conn.onmessage = (data) => this.onMessage(data && data.data)
-      S.conn.onopen = () => {
-        S.open = true
-        this.status = 'Verbonden. Beeld ophalen…'
-        this.requestStream()
-      }
-      S.conn.onclose = (data) => {
-        S.open = false
-        this.status = 'Verbinding verbroken (' + (data && data.code) + ')'
-      }
-      S.conn.onerror = (data) => {
-        this.status = 'Fout ' + (data && data.code) + '. Open WatchCam op je telefoon.'
-      }
-    }
-    S.conn.getReadyState({
-      success: (d) => {
-        S.open = d.status === 1
-        if (S.open) this.requestStream()
-        else this.diagnose()
-      },
-      fail: () => this.diagnose()
-    })
-    // Keep asking for frames until they arrive (the phone app may start later)
-    if (S.startTimer) clearInterval(S.startTimer)
-    S.startTimer = setInterval(() => {
-      if (!S.visible) return
-      if (Date.now() - S.lastFrameAt > 4000) this.requestStream()
-    }, 3000)
-  },
-
-  diagnose() {
-    if (!S.conn || !S.conn.diagnosis) return
-    S.conn.diagnosis({
-      success: (d) => {
-        this.status = this.status + ' | diagnose: ' + (DIAG[d.status] || ('code ' + d.status))
-      },
-      fail: (d, code) => { this.status = this.status + ' | diagnose mislukt ' + code }
-    })
-  },
-
-  requestStream() {
-    this.sendCmd({ cmd: 'start', m: this.fit ? 'fit' : 'fill' })
-  },
-
-  onPage(e) {
-    const fit = e && e.index === 1
-    if (fit !== this.fit) this.setMode(fit)
-  },
-
-  toggleMode() {
-    this.setMode(!this.fit)
-  },
-
-  setMode(fit) {
-    this.fit = fit
-    try { vibrator.vibrate({ mode: 'short' }) } catch (e) {}
-    storage.set({ key: 'mode', value: this.fit ? 'fit' : 'fill' })
-    this.sendCmd({ cmd: 'mode', m: this.fit ? 'fit' : 'fill' })
-  },
-
-  sendCmd(obj) {
-    if (!S.conn) return
-    S.conn.send({
-      data: obj,
-      fail: (d, code) => {
-        if (obj.cmd !== 'stop' && obj.cmd !== 'ack') {
-          let info = code
-          if (info === undefined) {
-            try { info = JSON.stringify(d) } catch (e) { info = String(d) }
-          }
-          this.status = 'Versturen mislukt: ' + String(info).substring(0, 60)
-          this.diagnose()
-        }
-      }
-    })
-  },
-
-  onMessage(raw) {
-    try {
-      this.handleMessage(raw)
-    } catch (e) {
-      this.dbg = 'Fout: ' + e + (e && e.stack ? (' ' + String(e.stack).substring(0, 80)) : '')
-    }
-  },
-
-  handleMessage(raw) {
-    S.rx = (S.rx || 0) + 1
-    if (!this.frameUri) {
-      let preview = ''
-      try { preview = typeof raw === 'string' ? raw.substring(0, 40) : (typeof raw) + ' ' + JSON.stringify(raw).substring(0, 40) } catch (e) { preview = typeof raw }
-      this.status = 'Ontvangen: ' + S.rx
-    }
-    let msg = raw
-    if (typeof raw === 'string') {
-      try { msg = JSON.parse(raw) } catch (e) { return }
-    }
-    if (!msg) return
-    if (typeof msg === 'object' && msg.data && !msg.t) {
-      // Some firmware wraps the payload once more
-      msg = msg.data
-      if (typeof msg === 'string') { try { msg = JSON.parse(msg) } catch (e) { return } }
-    }
-    if (msg.t === 'c') this.onChunk(msg)
-    else if (msg.t === 'shot') this.onShot(msg)
-    else if (msg.t === 'hello') this.requestStream()
-  },
-
-  // ---- Frames ------------------------------------------------------------
-
-  onChunk(msg) {
-    if (msg.s !== S.seq) {
-      S.seq = msg.s
-      S.chunks = new Array(msg.n)
-      S.got = 0
-    }
-    if (S.chunks[msg.i] === undefined) {
-      S.chunks[msg.i] = msg.d
-      S.got++
-    }
-    if (S.got === msg.n) {
-      const b64 = S.chunks.join('')
-      const seq = S.seq
-      S.chunks = []
-      S.got = 0
-      this.showFrame(b64, seq)
-    }
-  },
-
-  showFrame(b64, seq) {
-    // Ack right away so the phone can already send the next frame while we decode
-    if (S.visible) this.sendCmd({ cmd: 'ack', s: seq })
-    if (S.writing) return
-    S.writing = true
-    // Each frame gets a new name (the image component caches by name), and the
-    // file from two frames ago is deleted straight away so storage never fills up
-    const n = S.frameNo++
-    const uri = 'internal://cache/f' + n + '.jpg'
-    let buffer
-    try {
-      buffer = b64ToArrayBuffer(b64)
-    } catch (e) {
-      this.dbg = 'Decoderen mislukt: ' + e
-      S.writing = false
-      return
-    }
-    file.writeArrayBuffer({
-      uri: uri,
-      buffer: new Uint8Array(buffer),
-      success: () => {
-        S.writing = false
-        if (this.dbg) this.dbg = ''
-        if (S.prevUri) file.delete({ uri: S.prevUri })
-        S.prevUri = this.frameUri
-        this.frameUri = uri
-        S.lastFrameAt = Date.now()
-        if (this.countdown === 0 && !this.busy) this.status = ''
-      },
-      fail: (d, code) => {
-        S.writing = false
-        this.dbg = 'Opslaan mislukt: ' + code + ' ' + JSON.stringify(d)
-      }
-    })
-  },
-
-  // ---- Controls ----------------------------------------------------------
-
-  setTimer(i) {
-    this.timerIndex = i
-    this.timerLabel = TIMERS[i] + 's'
-  },
-
-  toggleTimer() {
-    this.setTimer((this.timerIndex + 1) % TIMERS.length)
-    storage.set({ key: 'timerIndex', value: String(this.timerIndex) })
-  },
-
-  onShutter() {
-    if (this.busy) return
-    this.busy = true
-    const secs = TIMERS[this.timerIndex]
-    if (secs === 0) {
-      this.takePhoto()
-      return
-    }
-    this.countdown = secs
-    S.countdownTimer = setInterval(() => {
-      this.countdown--
-      if (this.countdown <= 0) {
-        clearInterval(S.countdownTimer)
-        S.countdownTimer = null
-        this.takePhoto()
-      } else {
-        try { vibrator.vibrate({ mode: 'short' }) } catch (e) {}
-      }
-    }, 1000)
-  },
-
-  takePhoto() {
-    this.status = 'Foto nemen…'
-    this.sendCmd({ cmd: 'shutter' })
-    // Don't stay stuck if the answer never comes
-    setTimeout(() => {
-      if (this.busy) {
-        this.busy = false
-        this.status = 'Geen antwoord van telefoon'
-      }
-    }, 8000)
-  },
-
-  onShot(msg) {
-    this.busy = false
-    if (msg.ok) {
-      this.status = ''
-      this.flash = true
-      setTimeout(() => { this.flash = false }, 250)
-      try { vibrator.vibrate({ mode: 'long' }) } catch (e) {}
-    } else {
-      this.status = 'Foto mislukt: ' + (msg.e || '')
-    }
-  },
-
-  switchCamera() {
-    this.sendCmd({ cmd: 'switch' })
-  }
+  goCamera() { router.push({ uri: '/pages/camera' }) },
+  goNav() { router.push({ uri: '/pages/nav' }) },
+  goNotif() { router.push({ uri: '/pages/notif' }) }
 }
 </script>
 
@@ -397,144 +64,58 @@ export default {
   width: 480px;
   height: 480px;
   background-color: #000000;
-}
-.pager {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 480px;
-  height: 480px;
-}
-.page {
-  width: 480px;
-  height: 480px;
-}
-.preview {
-  width: 480px;
-  height: 480px;
-  object-fit: fill;
-}
-.placeholder {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 480px;
-  height: 480px;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
-  padding: 60px;
+  padding-top: 50px;
 }
-.placeholder-title {
-  font-size: 44px;
-  color: #ff6b00;
+.title {
+  font-size: 40px;
   font-weight: bold;
-  margin-bottom: 20px;
+  color: #4fc3f7;
 }
-.placeholder-text {
-  font-size: 26px;
-  color: #cccccc;
-  text-align: center;
+.status {
+  font-size: 20px;
+  color: #888888;
+  margin-bottom: 14px;
 }
-.mode-wrap {
-  position: absolute;
-  left: 0;
-  top: 34px;
-  width: 480px;
-  height: 60px;
-  justify-content: center;
+.item {
+  width: 320px;
+  height: 88px;
+  margin-top: 12px;
+  border-radius: 44px;
+  background-color: #1e1e1e;
+  flex-direction: row;
   align-items: center;
+  padding-left: 30px;
 }
-.mode-btn {
-  width: 96px;
-  height: 52px;
-  border-radius: 26px;
-  background-color: rgba(0, 0, 0, 0.55);
+.dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 15px;
+  margin-right: 24px;
+}
+.dot-cam {
+  background-color: #ff6b00;
+}
+.dot-nav {
+  background-color: #1976d2;
+}
+.dot-notif {
+  background-color: #66bb6a;
+}
+.label {
+  font-size: 32px;
+  color: #ffffff;
+}
+.badge {
+  margin-left: 20px;
+  min-width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  background-color: #ef5350;
   color: #ffffff;
   font-size: 24px;
   text-align: center;
-}
-.top {
-  position: absolute;
-  left: 0;
-  top: 96px;
-  width: 480px;
-  height: 60px;
-  justify-content: center;
-  align-items: flex-end;
-}
-.dbg {
-  font-size: 20px;
-  color: #ffcc00;
-  text-align: center;
-  margin-top: 8px;
-}
-.status {
-  font-size: 22px;
-  color: #ffffff;
-  background-color: rgba(0, 0, 0, 0.6);
-  border-radius: 16px;
-  padding: 6px 14px;
-  max-width: 300px;
-  text-align: center;
-}
-.countdown-wrap {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 480px;
-  height: 480px;
-  justify-content: center;
-  align-items: center;
-}
-.countdown {
-  font-size: 140px;
-  color: #ffffff;
-  font-weight: bold;
-}
-.flash {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 480px;
-  height: 480px;
-  background-color: #ffffff;
-}
-.controls {
-  position: absolute;
-  left: 0;
-  top: 310px;
-  width: 480px;
-  height: 140px;
-  flex-direction: row;
-  justify-content: center;
-  align-items: center;
-}
-.small-btn {
-  width: 72px;
-  height: 72px;
-  border-radius: 36px;
-  background-color: rgba(0, 0, 0, 0.55);
-  color: #ffffff;
-  font-size: 26px;
-  text-align: center;
-  margin: 0 22px;
-}
-.shutter-outer {
-  width: 110px;
-  height: 110px;
-  border-radius: 55px;
-  border: 6px solid #ffffff;
-  justify-content: center;
-  align-items: center;
-}
-.shutter-inner {
-  width: 86px;
-  height: 86px;
-  border-radius: 43px;
-  background-color: #ffffff;
-}
-.shutter-busy {
-  background-color: #ff6b00;
+  padding: 0 10px;
 }
 </style>

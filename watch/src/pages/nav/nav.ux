@@ -1,0 +1,216 @@
+<template>
+  <div class="root">
+    <!-- Waiting for navigation -->
+    <div if="{{!active}}" class="idle">
+      <text class="idle-title">Navigatie</text>
+      <text class="idle-text">{{status}}</text>
+    </div>
+
+    <!-- Turn-by-turn -->
+    <div if="{{active}}" class="nav">
+      <div class="arrow-box">
+        <image if="{{arrowUri}}" class="arrow" src="{{arrowUri}}"></image>
+      </div>
+      <text class="dist">{{dist}}</text>
+      <text class="instr">{{instr}}</text>
+      <text if="{{street}}" class="street">{{street}}</text>
+      <text if="{{eta}}" class="eta">{{eta}}</text>
+    </div>
+
+    <!-- Flash when a turn is coming up -->
+    <div if="{{alert}}" class="alert"></div>
+  </div>
+</template>
+
+<script>
+import * as link from '../../common/link.js'
+import file from '@system.file'
+import brightness from '@system.brightness'
+import vibrator from '@system.vibrator'
+
+let unlisten = null
+const S = { arrowFile: '', arrowId: null }
+
+export default {
+  private: {
+    active: false,
+    status: 'Start navigatie in Google Maps',
+    dist: '',
+    instr: '',
+    street: '',
+    eta: '',
+    arrowUri: '',
+    alert: false
+  },
+
+  onShow() {
+    link.bind(this.$app)
+    unlisten = link.listen((m) => this.onMessage(m))
+    link.setPage('nav')
+    link.send({ cmd: 'hello' }, (info) => {
+      if (!this.active) this.status = 'Geen verbinding met telefoon (' + info.substring(0, 30) + ')'
+    })
+    if (!this.active) this.status = 'Start navigatie in Google Maps'
+  },
+
+  onHide() {
+    if (unlisten) { unlisten(); unlisten = null }
+    link.setPage('')
+  },
+
+  onDestroy() {
+    if (unlisten) { unlisten(); unlisten = null }
+    this.keepOn(false)
+  },
+
+
+  keepOn(on) {
+    try { brightness.setKeepScreenOn({ keepScreenOn: on }) } catch (e) {}
+  },
+
+  onMessage(msg) {
+    if (msg.t === 'nav') this.onNav(msg)
+    else if (msg.t === 'buzz') this.onBuzz()
+    else if (msg.t === 'end') this.onEnd()
+  },
+
+  // ---- Navigation --------------------------------------------------------
+
+  onNav(m) {
+    if (!this.active) {
+      this.active = true
+      this.keepOn(true)
+    }
+    this.dist = m.dist || ''
+    this.instr = m.instr || ''
+    this.street = m.street || ''
+    this.eta = m.eta || ''
+    if (m.icon && m.iconId !== S.arrowId) this.saveArrow(m.icon, m.iconId)
+    else if (m.iconId === -1) this.arrowUri = ''
+  },
+
+  saveArrow(b64, id) {
+    const uri = 'internal://cache/arrow' + id + '.png'
+    let bytes
+    try { bytes = link.b64ToBytes(b64) } catch (e) { return }
+    file.writeArrayBuffer({
+      uri: uri,
+      buffer: bytes,
+      success: () => {
+        const old = S.arrowFile
+        S.arrowFile = uri
+        S.arrowId = id
+        this.arrowUri = uri
+        if (old && old !== uri) file.delete({ uri: old })
+      }
+    })
+  },
+
+  onBuzz() {
+    try { vibrator.vibrate({ mode: 'long' }) } catch (e) {}
+    setTimeout(() => { try { vibrator.vibrate({ mode: 'long' }) } catch (e) {} }, 600)
+    this.alert = true
+    setTimeout(() => { this.alert = false }, 400)
+  },
+
+  onEnd() {
+    this.active = false
+    this.status = 'Navigatie gestopt'
+    this.arrowUri = ''
+    S.arrowId = null
+    if (S.arrowFile) { file.delete({ uri: S.arrowFile }); S.arrowFile = '' }
+    this.keepOn(false)
+  }
+}
+</script>
+
+<style>
+.root {
+  width: 480px;
+  height: 480px;
+  background-color: #000000;
+}
+.idle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 480px;
+  height: 480px;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 60px;
+}
+.idle-title {
+  font-size: 44px;
+  color: #4fc3f7;
+  font-weight: bold;
+  margin-bottom: 20px;
+}
+.idle-text {
+  font-size: 26px;
+  color: #cccccc;
+  text-align: center;
+}
+.nav {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 480px;
+  height: 480px;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 40px;
+}
+.arrow-box {
+  width: 150px;
+  height: 150px;
+  justify-content: center;
+  align-items: center;
+}
+.arrow {
+  width: 150px;
+  height: 150px;
+}
+.dist {
+  font-size: 64px;
+  font-weight: bold;
+  color: #ffffff;
+  margin-top: 4px;
+}
+.instr {
+  width: 380px;
+  font-size: 28px;
+  color: #dddddd;
+  text-align: center;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+.street {
+  width: 360px;
+  font-size: 32px;
+  font-weight: bold;
+  color: #4fc3f7;
+  text-align: center;
+  lines: 2;
+  text-overflow: ellipsis;
+}
+.eta {
+  width: 300px;
+  font-size: 22px;
+  color: #999999;
+  text-align: center;
+  margin-top: 8px;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+.alert {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 480px;
+  height: 480px;
+  border: 14px solid #ffcc00;
+  border-radius: 240px;
+}
+</style>

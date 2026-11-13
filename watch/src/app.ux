@@ -1,10 +1,10 @@
 <script>
 export default {
   onCreate() {
-    console.log('WatchCam started')
+    console.log('WatchHub started')
   },
   onDestroy() {
-    console.log('WatchCam stopped')
+    console.log('WatchHub stopped')
   }
 }
 </script>

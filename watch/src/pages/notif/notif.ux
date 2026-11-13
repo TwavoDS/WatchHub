@@ -1,0 +1,257 @@
+<template>
+  <div class="root">
+    <!-- List -->
+    <div if="{{!open}}" class="list-page">
+      <text class="title">Meldingen</text>
+      <text if="{{items.length === 0}}" class="empty">{{status}}</text>
+      <list if="{{items.length > 0}}" class="list">
+        <list-item for="{{items}}" type="item" class="row" onclick="openItem($idx)">
+          <div class="bar" style="background-color: {{$item.color}};"></div>
+          <image if="{{$item.icon}}" class="icon" src="{{$item.icon}}"></image>
+          <div class="row-text">
+            <text class="row-app" style="color: {{$item.color}};">{{$item.app}} · {{$item.time}}</text>
+            <text class="row-title">{{$item.title || $item.text}}</text>
+          </div>
+        </list-item>
+        <list-item type="footer" class="footer">
+          <text class="clear" onclick="clearAll">Alles wissen</text>
+        </list-item>
+      </list>
+    </div>
+
+    <!-- One notification -->
+    <div if="{{open}}" class="detail">
+      <scroll class="detail-scroll" scroll-y="true">
+        <div class="detail-inner">
+          <image if="{{cur.icon}}" class="big-icon" src="{{cur.icon}}"></image>
+          <text class="d-app" style="color: {{cur.color}};">{{cur.app}} · {{cur.time}}</text>
+          <text class="d-title">{{cur.title}}</text>
+          <text class="d-text">{{cur.text}}</text>
+          <div class="buttons">
+            <text class="btn btn-back" onclick="closeItem">Terug</text>
+            <text class="btn btn-done" style="background-color: {{cur.color}};" onclick="dismissCur">Wegtikken</text>
+          </div>
+        </div>
+      </scroll>
+    </div>
+  </div>
+</template>
+
+<script>
+import * as link from '../../common/link.js'
+import brightness from '@system.brightness'
+
+let unlisten = null
+let autoOpen = false
+
+export default {
+  private: {
+    items: [],
+    open: false,
+    cur: {},
+    status: 'Geen meldingen'
+  },
+
+  onShow() {
+    link.bind(this.$app)
+    unlisten = link.listen((m) => this.onMessage(m))
+    link.setPage('notif')
+    link.sync()
+    this.refresh()
+    // A new notification opens straight away
+    if (this.items.length > 0 && !this.open) this.openItem(0)
+    else autoOpen = true
+  },
+
+  onHide() {
+    if (unlisten) { unlisten(); unlisten = null }
+    link.setPage('')
+    try { brightness.setKeepScreenOn({ keepScreenOn: false }) } catch (e) {}
+  },
+
+  refresh() {
+    this.items = link.notifs().map((n) => ({
+      id: n.id,
+      app: n.app,
+      title: n.title,
+      text: n.text,
+      time: n.time,
+      color: n.color || '#4FC3F7',
+      icon: link.iconFor(n.pkg)
+    }))
+    if (this.open) {
+      const still = this.items.find((i) => i.id === this.cur.id)
+      if (still) this.cur = still
+      else this.open = false
+    }
+  },
+
+  onMessage(m) {
+    if (m.t === 'notif') {
+      this.refresh()
+      this.openItem(0)
+    } else if (m.t === 'list' || m.t === 'gone' || m.t === 'iconReady') {
+      this.refresh()
+      if (m.t === 'list' && autoOpen && this.items.length > 0) {
+        autoOpen = false
+        this.openItem(0)
+      }
+    } else if (m.t === 'linkError' || m.t === 'linkClosed') {
+      if (this.items.length === 0) this.status = 'Geen verbinding met telefoon'
+    }
+  },
+
+  openItem(idx) {
+    const it = this.items[idx]
+    if (!it) return
+    this.cur = it
+    this.open = true
+  },
+
+  closeItem() {
+    this.open = false
+  },
+
+  dismissCur() {
+    link.dismiss(this.cur.id)
+    this.open = false
+    this.refresh()
+  },
+
+  clearAll() {
+    this.items.forEach((i) => link.dismiss(i.id))
+    this.refresh()
+  }
+}
+</script>
+
+<style>
+.root {
+  width: 480px;
+  height: 480px;
+  background-color: #000000;
+}
+.list-page {
+  width: 480px;
+  height: 480px;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 40px;
+}
+.title {
+  font-size: 34px;
+  font-weight: bold;
+  color: #66bb6a;
+  margin-bottom: 8px;
+}
+.empty {
+  margin-top: 100px;
+  font-size: 26px;
+  color: #888888;
+}
+.list {
+  width: 400px;
+  height: 400px;
+}
+.row {
+  width: 400px;
+  height: 96px;
+  margin-bottom: 10px;
+  border-radius: 24px;
+  background-color: #1e1e1e;
+  flex-direction: row;
+  align-items: center;
+}
+.bar {
+  width: 10px;
+  height: 96px;
+  border-radius: 5px;
+}
+.icon {
+  width: 56px;
+  height: 56px;
+  margin-left: 14px;
+}
+.row-text {
+  flex: 1;
+  flex-direction: column;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+.row-app {
+  font-size: 20px;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+.row-title {
+  font-size: 26px;
+  color: #ffffff;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+.footer {
+  width: 400px;
+  height: 120px;
+  justify-content: center;
+  align-items: flex-start;
+}
+.clear {
+  font-size: 24px;
+  color: #ef5350;
+  padding: 14px 28px;
+  border-radius: 30px;
+  background-color: #1e1e1e;
+}
+.detail {
+  width: 480px;
+  height: 480px;
+}
+.detail-scroll {
+  width: 480px;
+  height: 480px;
+}
+.detail-inner {
+  width: 480px;
+  flex-direction: column;
+  align-items: center;
+  padding: 50px 70px 80px 70px;
+}
+.big-icon {
+  width: 72px;
+  height: 72px;
+  margin-bottom: 8px;
+}
+.d-app {
+  font-size: 22px;
+}
+.d-title {
+  font-size: 30px;
+  font-weight: bold;
+  color: #ffffff;
+  text-align: center;
+  margin-top: 6px;
+}
+.d-text {
+  font-size: 26px;
+  color: #dddddd;
+  text-align: center;
+  margin-top: 10px;
+}
+.buttons {
+  flex-direction: row;
+  margin-top: 26px;
+}
+.btn {
+  font-size: 24px;
+  color: #ffffff;
+  padding: 14px 24px;
+  border-radius: 30px;
+  margin: 0 8px;
+}
+.btn-back {
+  background-color: #333333;
+}
+.btn-done {
+  color: #000000;
+}
+</style>
