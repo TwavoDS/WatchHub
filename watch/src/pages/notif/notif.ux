@@ -25,11 +25,15 @@
         <image if="{{cur.icon}}" class="big-icon" src="{{cur.icon}}"></image>
         <text class="d-app" style="color: {{cur.color}};">{{cur.call ? 'Oproep' : cur.app}} · {{cur.time}}</text>
       </list-item>
-      <list-item type="title" class="li-text">
-        <text class="{{cur.call ? 'd-caller' : 'd-title'}}">{{cur.title}}</text>
+      <!-- Text with emoji: drawn by the phone as a picture -->
+      <list-item if="{{cur.bodyImg}}" type="bodyimg" class="li-img" style="height: {{cur.bodyH + 16}}px;">
+        <image src="{{cur.bodyImg}}" style="width: {{cur.bodyW}}px; height: {{cur.bodyH}}px;"></image>
       </list-item>
-      <list-item if="{{cur.text}}" type="body" class="li-text">
-        <text class="d-text">{{cur.text}}</text>
+      <list-item if="{{!cur.bodyImg && cur.title}}" type="title" class="li-text" style="height: {{cur.titleH}}px;">
+        <text class="{{cur.call ? 'd-caller' : 'd-title'}}" style="height: {{cur.titleH}}px;">{{cur.title}}</text>
+      </list-item>
+      <list-item if="{{!cur.bodyImg && cur.text}}" type="body" class="li-text" style="height: {{cur.textH}}px;">
+        <text class="d-text" style="height: {{cur.textH}}px;">{{cur.text}}</text>
       </list-item>
 
       <!-- Buttons of the notification (e.g. Opnemen / Weigeren / Markeren als gelezen) -->
@@ -42,7 +46,10 @@
         <text class="section">Snel antwoorden</text>
       </list-item>
       <list-item for="{{cur.replies}}" type="reply" class="li-btn">
-        <text class="reply" onclick="doReply($item)">{{$item}}</text>
+        <div class="reply" onclick="doReply($item.text)">
+          <image if="{{$item.img}}" src="{{$item.img}}" style="width: 280px; height: {{$item.h}}px;"></image>
+          <text if="{{!$item.img}}" class="reply-t">{{$item.text}}</text>
+        </div>
       </list-item>
 
       <list-item type="buttons" class="li-buttons">
@@ -70,6 +77,16 @@ function actClass(title) {
   if (/weiger|decline|ophang|hang up|afwijz|reject|beëindig/.test(t)) return 'act-red'
   if (/opnem|answer|beantw|accept/.test(t)) return 'act-green'
   return ''
+}
+
+/** Rough height of wrapped text, because text in a list collapses without one. */
+function textHeight(str, size, width, bold) {
+  const s = String(str || '')
+  if (!s) return 0
+  const perLine = Math.max(8, Math.floor(width / (size * (bold ? 0.6 : 0.55))))
+  let lines = 0
+  s.split('\n').forEach((p) => { lines += Math.max(1, Math.ceil(p.length / perLine)) })
+  return Math.ceil(lines * size * 1.4) + 12
 }
 
 export default {
@@ -100,6 +117,8 @@ export default {
   },
 
   toView(n) {
+    const img = link.imageFor(n.img)
+    const rimg = n.rimg || []
     return {
       id: n.id,
       app: n.app,
@@ -111,7 +130,15 @@ export default {
       call: !!n.call,
       dur: typeof n.dur === 'number' ? n.dur : 10,
       actions: (n.actions || []).map((a) => ({ i: a.i, title: a.title, cls: actClass(a.title) })),
-      replies: n.replies || []
+      bodyImg: img ? img.uri : '',
+      bodyW: img ? img.w : 0,
+      bodyH: img ? img.h : 0,
+      titleH: n.call ? textHeight(n.title, 36, 340, true) + 8 : textHeight(n.title, 26, 320, true),
+      textH: textHeight(n.text, 24, 340, false) + 8,
+      replies: (n.replies || []).map((r, i) => {
+        const ri = link.imageFor(rimg[i])
+        return { text: r, img: ri ? ri.uri : '', h: ri ? ri.h : 0 }
+      })
     }
   },
 
@@ -129,7 +156,7 @@ export default {
       link.takeOpenId()
       this.refresh()
       this.openById(m.id)
-    } else if (m.t === 'list' || m.t === 'gone' || m.t === 'iconReady') {
+    } else if (m.t === 'list' || m.t === 'gone' || m.t === 'iconReady' || m.t === 'imgReady') {
       this.refresh()
     } else if (m.t === 'linkError' || m.t === 'linkClosed') {
       if (this.items.length === 0) this.status = 'Geen verbinding met telefoon'
@@ -312,7 +339,11 @@ export default {
 .li-text {
   width: 480px;
   justify-content: center;
-  padding: 4px 0;
+}
+.li-img {
+  width: 480px;
+  justify-content: center;
+  align-items: center;
 }
 .li-section {
   width: 480px;
@@ -361,7 +392,6 @@ export default {
   font-weight: bold;
   color: #ffffff;
   text-align: center;
-  margin-top: 4px;
 }
 .d-caller {
   width: 340px;
@@ -370,7 +400,6 @@ export default {
   font-weight: bold;
   color: #ffffff;
   text-align: center;
-  margin-top: 8px;
 }
 .d-text {
   width: 340px;
@@ -378,7 +407,6 @@ export default {
   font-size: 24px;
   color: #dddddd;
   text-align: center;
-  margin-top: 8px;
 }
 .section {
   height: 30px;
@@ -404,12 +432,20 @@ export default {
 }
 .reply {
   width: 300px;
-  height: 52px;
+  height: 56px;
+  border-radius: 28px;
+  background-color: #263238;
+  justify-content: center;
+  align-items: center;
+}
+.reply-t {
+  width: 280px;
+  height: 56px;
   font-size: 22px;
   color: #ffffff;
   text-align: center;
-  border-radius: 26px;
-  background-color: #263238;
+  lines: 1;
+  text-overflow: ellipsis;
 }
 .btn {
   height: 56px;

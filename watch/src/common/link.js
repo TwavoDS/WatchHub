@@ -53,6 +53,9 @@ function newState() {
     icons: {},              // pkg -> uri of a saved icon
     iconAsked: {},
     page: '',
+    imgs: {},               // key -> {uri, h, w}: text drawn by the phone (emoji)
+    imgParts: {},
+    imgAsked: {},
     openId: null,       // notification to show as soon as the notification page opens
     autoClose: false    // the app was opened for a notification: exit after its display time
   }
@@ -94,6 +97,7 @@ function onMessage(raw) {
       break
     case 'gone':
       state.notifs = state.notifs.filter((n) => n.id !== msg.id)
+      dropImage('b' + msg.id)
       break
     case 'list':
       state.notifs = (msg.items || []).slice().reverse()
@@ -101,6 +105,9 @@ function onMessage(raw) {
       break
     case 'icon':
       saveIcon(msg.pkg, msg.d)
+      return
+    case 'img':
+      imgPart(msg)
       return
     case 'goto': {
       // The phone opened the app for a notification or navigation. The notification
@@ -144,6 +151,48 @@ function saveIcon(pkg, b64) {
       emit({ t: 'iconReady', pkg: pkg })
     }
   })
+}
+
+function imgPart(m) {
+  if (!m.k) return
+  let p = state.imgParts[m.k]
+  if (!p || p.n !== m.n) { p = { n: m.n, got: 0, parts: [] }; state.imgParts[m.k] = p }
+  if (p.parts[m.c] === undefined) { p.parts[m.c] = m.d; p.got++ }
+  if (p.got < p.n) return
+  delete state.imgParts[m.k]
+  let bytes
+  try { bytes = b64ToBytes(p.parts.join('')) } catch (e) { return }
+  const uri = 'internal://cache/t_' + m.k + '_' + Date.now() + '.png'
+  file.writeArrayBuffer({
+    uri: uri,
+    buffer: bytes,
+    success: () => {
+      const old = state.imgs[m.k]
+      if (old) { try { file.delete({ uri: old.uri }) } catch (e) {} }
+      state.imgs[m.k] = { uri: uri, h: m.h, w: m.w }
+      emit({ t: 'imgReady', k: m.k })
+    }
+  })
+}
+
+function dropImage(k) {
+  const old = state.imgs[k]
+  if (!old) return
+  delete state.imgs[k]
+  try { file.delete({ uri: old.uri }) } catch (e) {}
+}
+
+/** Picture of text drawn by the phone, or null; asks the phone for it the first time. */
+export function imageFor(k) {
+  if (!k) return null
+  const have = state.imgs[k]
+  if (have) return have
+  const now = Date.now()
+  if (!state.imgAsked[k] || now - state.imgAsked[k] > 8000) {
+    state.imgAsked[k] = now
+    send({ cmd: 'img', k: k })
+  }
+  return null
 }
 
 export function connect() {
@@ -194,6 +243,7 @@ export function iconFor(pkg) { return state.icons[pkg] || '' }
 
 export function dismiss(id) {
   state.notifs = state.notifs.filter((n) => n.id !== id)
+  dropImage('b' + id)
   send({ cmd: 'dismiss', id: id })
   emit({ t: 'gone', id: id })
 }

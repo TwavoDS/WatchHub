@@ -79,6 +79,7 @@ class HubNotificationService : NotificationListenerService() {
         WatchLink.handlers["action"] = { m -> runAction(m.optInt("id"), m.optInt("i")) }
         WatchLink.handlers["reply"] = { m -> reply(m.optInt("id"), m.optString("text")) }
         WatchLink.handlers["icon"] = { m -> sendIcon(m.optString("pkg")) }
+        WatchLink.handlers["img"] = { m -> sendImage(m.optString("k")) }
         WatchLink.handlers["page"] = { m -> watchPage = m.optString("p") }
         WatchLink.handlers["findphone"] = { m -> if (m.optBoolean("on")) FindPhone.start(this) else FindPhone.stop() }
         try {
@@ -222,7 +223,54 @@ class HubNotificationService : NotificationListenerService() {
         json.put("replies", if (reply != null) JSONArray(NotifRules.replies(this)) else JSONArray())
     }
 
+    /**
+     * Text the watch font can't show (emoji) is drawn here as a picture. The watch asks for
+     * it with {"cmd":"img","k":key} and gets it back in pieces as {"t":"img",...}.
+     */
+    private val imgSources = object : LinkedHashMap<String, () -> TextImage.Result>() {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, () -> TextImage.Result>?) = size > 80
+    }
+
+    private fun addImages(json: JSONObject) {
+        val id = json.optInt("id")
+        val title = json.optString("title")
+        val text = json.optString("text")
+        if (TextImage.needsImage(title + text)) {
+            val key = "b$id"
+            val call = json.optBoolean("call")
+            imgSources[key] = { TextImage.body(title, text, if (call) 36f else 28f) }
+            json.put("img", key)
+        }
+        val replies = json.optJSONArray("replies") ?: return
+        val keys = JSONArray()
+        for (i in 0 until replies.length()) {
+            val r = replies.optString(i)
+            if (TextImage.needsImage(r)) {
+                val key = "r" + Integer.toHexString(r.hashCode())
+                imgSources[key] = { TextImage.line(r) }
+                keys.put(key)
+            } else keys.put("")
+        }
+        json.put("rimg", keys)
+    }
+
+    private fun sendImage(key: String) {
+        val make = imgSources[key] ?: return
+        val img = try { make() } catch (_: Exception) { return }
+        val d = img.base64
+        val size = 7000
+        val n = (d.length + size - 1) / size
+        for (c in 0 until n) {
+            // A little apart, so the watch isn't flooded
+            val msg = JSONObject().put("t", "img").put("k", key).put("c", c).put("n", n)
+                    .put("h", img.height).put("w", img.width)
+                    .put("d", d.substring(c * size, minOf(d.length, (c + 1) * size)))
+            main.postDelayed({ WatchLink.post(msg) }, c * 200L)
+        }
+    }
+
     private fun remember(item: Item) {
+        addImages(item.json)
         items.remove(item.id)
         items[item.id] = item
         while (items.size > MAX_ITEMS) items.remove(items.keys.first())

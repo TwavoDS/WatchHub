@@ -249,27 +249,27 @@ export default {
   height: 480px;
   flex-direction: column;
   align-items: center;
-  padding-top: 60px;
+  padding-top: 46px;
 }
 .arrow-box {
-  width: 96px;
-  height: 96px;
+  width: 112px;
+  height: 112px;
   justify-content: center;
   align-items: center;
 }
 .arrow {
-  width: 96px;
-  height: 96px;
+  width: 112px;
+  height: 112px;
 }
 .dist {
-  font-size: 42px;
+  font-size: 54px;
   font-weight: bold;
   color: #ffffff;
   margin-top: 4px;
 }
 .instr {
-  width: 340px;
-  font-size: 24px;
+  width: 380px;
+  font-size: 30px;
   color: #ffffff;
   text-align: center;
   lines: 2;
@@ -277,8 +277,8 @@ export default {
   margin-top: 4px;
 }
 .street {
-  width: 320px;
-  font-size: 24px;
+  width: 360px;
+  font-size: 30px;
   font-weight: bold;
   color: #4fc3f7;
   text-align: center;
@@ -287,8 +287,8 @@ export default {
   margin-top: 4px;
 }
 .eta {
-  width: 240px;
-  font-size: 18px;
+  width: 280px;
+  font-size: 22px;
   color: #999999;
   text-align: center;
   margin-top: 8px;
