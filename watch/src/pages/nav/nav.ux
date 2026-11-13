@@ -6,8 +6,11 @@
       <text class="idle-text">{{status}}</text>
     </div>
 
-    <!-- Turn-by-turn -->
-    <div if="{{active}}" class="nav">
+    <!-- Map from the phone (when "Kaart naar horloge" is on); tap to hide/show -->
+    <image if="{{active && mapUri && showMap}}" class="map" src="{{mapUri}}" onclick="toggleMap"></image>
+
+    <!-- Turn-by-turn without map -->
+    <div if="{{active && !(mapUri && showMap)}}" class="nav" onclick="toggleMap">
       <div class="arrow-box">
         <image if="{{arrowUri}}" class="arrow" src="{{arrowUri}}"></image>
       </div>
@@ -15,6 +18,18 @@
       <text class="instr">{{instr}}</text>
       <text if="{{street}}" class="street">{{street}}</text>
       <text if="{{eta}}" class="eta">{{eta}}</text>
+    </div>
+
+    <!-- Turn-by-turn on top of the map -->
+    <div if="{{active && mapUri && showMap}}" class="map-top">
+      <div class="map-arrow-bg">
+        <image if="{{arrowUri}}" class="map-arrow" src="{{arrowUri}}"></image>
+      </div>
+      <text if="{{dist}}" class="map-dist">{{dist}}</text>
+    </div>
+    <div if="{{active && mapUri && showMap}}" class="map-bottom">
+      <text class="map-instr">{{street || instr}}</text>
+      <text if="{{eta}}" class="map-eta">{{eta}}</text>
     </div>
 
     <!-- Flash when a turn is coming up -->
@@ -29,7 +44,12 @@ import brightness from '@system.brightness'
 import vibrator from '@system.vibrator'
 
 let unlisten = null
-const S = { arrowFile: '', arrowId: null }
+const S = {
+  arrowFile: '', arrowId: null,
+  // map frames
+  frameNo: 0, seq: -1, chunks: [], got: 0, writing: false, prevUri: '',
+  visible: false, mapTimer: null, lastFrameAt: 0
+}
 
 export default {
   private: {
@@ -40,38 +60,62 @@ export default {
     street: '',
     eta: '',
     arrowUri: '',
+    mapUri: '',
+    showMap: true,
     alert: false
   },
 
   onShow() {
     link.bind(this.$app)
+    S.visible = true
     unlisten = link.listen((m) => this.onMessage(m))
     link.setPage('nav')
     link.send({ cmd: 'hello' }, (info) => {
       if (!this.active) this.status = 'Geen verbinding met telefoon (' + info.substring(0, 30) + ')'
     })
     if (!this.active) this.status = 'Start navigatie in Google Maps'
+    this.requestMap()
+    // Keep asking: the map recording on the phone may start later
+    if (S.mapTimer) clearInterval(S.mapTimer)
+    S.mapTimer = setInterval(() => {
+      if (S.visible && Date.now() - S.lastFrameAt > 5000) this.requestMap()
+    }, 5000)
   },
 
   onHide() {
+    S.visible = false
+    link.send({ cmd: 'stop' })
+    if (S.mapTimer) { clearInterval(S.mapTimer); S.mapTimer = null }
     if (unlisten) { unlisten(); unlisten = null }
     link.setPage('')
   },
 
   onDestroy() {
+    if (S.mapTimer) clearInterval(S.mapTimer)
     if (unlisten) { unlisten(); unlisten = null }
     this.keepOn(false)
   },
 
-
   keepOn(on) {
     try { brightness.setKeepScreenOn({ keepScreenOn: on }) } catch (e) {}
+  },
+
+  requestMap() {
+    link.send({ cmd: 'start', src: 'map', m: 'fill', r: 1000 })
+  },
+
+  toggleMap() {
+    if (!this.mapUri) return
+    this.showMap = !this.showMap
   },
 
   onMessage(msg) {
     if (msg.t === 'nav') this.onNav(msg)
     else if (msg.t === 'buzz') this.onBuzz()
     else if (msg.t === 'end') this.onEnd()
+    else if (msg.t === 'c') this.onChunk(msg)
+    else if (msg.t === 'nomap') this.mapUri = ''
+    else if (msg.t === 'linkOpen') this.requestMap()
   },
 
   // ---- Navigation --------------------------------------------------------
@@ -106,6 +150,48 @@ export default {
     })
   },
 
+  // ---- Map frames ----------------------------------------------------------
+
+  onChunk(msg) {
+    if (msg.s !== S.seq) {
+      S.seq = msg.s
+      S.chunks = new Array(msg.n)
+      S.got = 0
+    }
+    if (S.chunks[msg.i] === undefined) {
+      S.chunks[msg.i] = msg.d
+      S.got++
+    }
+    if (S.got === msg.n) {
+      const b64 = S.chunks.join('')
+      const seq = S.seq
+      S.chunks = []
+      S.got = 0
+      this.showFrame(b64, seq)
+    }
+  },
+
+  showFrame(b64, seq) {
+    if (S.visible) link.send({ cmd: 'ack', s: seq })
+    if (S.writing) return
+    S.writing = true
+    const uri = 'internal://cache/m' + (S.frameNo++) + '.jpg'
+    let bytes
+    try { bytes = link.b64ToBytes(b64) } catch (e) { S.writing = false; return }
+    file.writeArrayBuffer({
+      uri: uri,
+      buffer: bytes,
+      success: () => {
+        S.writing = false
+        if (S.prevUri) file.delete({ uri: S.prevUri })
+        S.prevUri = this.mapUri
+        this.mapUri = uri
+        S.lastFrameAt = Date.now()
+      },
+      fail: () => { S.writing = false }
+    })
+  },
+
   onBuzz() {
     try { vibrator.vibrate({ mode: 'long' }) } catch (e) {}
     setTimeout(() => { try { vibrator.vibrate({ mode: 'long' }) } catch (e) {} }, 600)
@@ -117,6 +203,7 @@ export default {
     this.active = false
     this.status = 'Navigatie gestopt'
     this.arrowUri = ''
+    this.mapUri = ''
     S.arrowId = null
     if (S.arrowFile) { file.delete({ uri: S.arrowFile }); S.arrowFile = '' }
     this.keepOn(false)
@@ -142,16 +229,18 @@ export default {
   padding: 60px;
 }
 .idle-title {
-  font-size: 44px;
+  font-size: 40px;
   color: #4fc3f7;
   font-weight: bold;
   margin-bottom: 20px;
 }
 .idle-text {
-  font-size: 26px;
+  font-size: 24px;
   color: #cccccc;
   text-align: center;
 }
+
+/* ---- Without map: everything stays inside the round screen ---- */
 .nav {
   position: absolute;
   left: 0;
@@ -160,48 +249,118 @@ export default {
   height: 480px;
   flex-direction: column;
   align-items: center;
-  padding-top: 48px;
+  padding-top: 60px;
 }
 .arrow-box {
-  width: 116px;
-  height: 116px;
+  width: 96px;
+  height: 96px;
   justify-content: center;
   align-items: center;
 }
 .arrow {
-  width: 116px;
-  height: 116px;
+  width: 96px;
+  height: 96px;
 }
-/* Everything stays inside the round screen: the lower, the narrower */
 .dist {
-  font-size: 54px;
+  font-size: 42px;
   font-weight: bold;
   color: #ffffff;
+  margin-top: 4px;
 }
 .instr {
-  width: 360px;
-  font-size: 30px;
-  font-weight: bold;
+  width: 340px;
+  font-size: 24px;
   color: #ffffff;
   text-align: center;
   lines: 2;
   text-overflow: ellipsis;
+  margin-top: 4px;
 }
 .street {
-  width: 340px;
-  font-size: 28px;
+  width: 320px;
+  font-size: 24px;
+  font-weight: bold;
   color: #4fc3f7;
   text-align: center;
-  lines: 1;
+  lines: 2;
   text-overflow: ellipsis;
   margin-top: 4px;
 }
 .eta {
   width: 240px;
-  font-size: 20px;
+  font-size: 18px;
   color: #999999;
   text-align: center;
-  margin-top: 10px;
+  margin-top: 8px;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+
+/* ---- With map ---- */
+.map {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 480px;
+  height: 480px;
+}
+.map-top {
+  position: absolute;
+  left: 0;
+  top: 28px;
+  width: 480px;
+  height: 90px;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+.map-arrow-bg {
+  width: 76px;
+  height: 76px;
+  border-radius: 38px;
+  background-color: rgba(0, 0, 0, 0.75);
+  justify-content: center;
+  align-items: center;
+}
+.map-arrow {
+  width: 56px;
+  height: 56px;
+}
+.map-dist {
+  font-size: 30px;
+  font-weight: bold;
+  color: #ffffff;
+  background-color: rgba(0, 0, 0, 0.75);
+  border-radius: 20px;
+  padding: 6px 14px;
+  margin-left: 10px;
+}
+.map-bottom {
+  position: absolute;
+  left: 90px;
+  top: 360px;
+  width: 300px;
+  height: 90px;
+  flex-direction: column;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.75);
+  border-radius: 24px;
+  padding: 8px 14px;
+}
+.map-instr {
+  width: 270px;
+  font-size: 22px;
+  font-weight: bold;
+  color: #ffffff;
+  text-align: center;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+.map-eta {
+  width: 270px;
+  font-size: 18px;
+  color: #bbbbbb;
+  text-align: center;
   lines: 1;
   text-overflow: ellipsis;
 }

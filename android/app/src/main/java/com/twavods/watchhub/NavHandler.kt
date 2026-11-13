@@ -115,6 +115,13 @@ class NavHandler(private val ctx: Context) {
         lastSentKey = ""
         buzzedFor = ""
         WatchLink.post(JSONObject().put("t", "end"))
+        // Stop recording the map when navigation ends
+        if (ScreenStreamService.runningFor(ScreenStreamService.TARGET_MAP)) {
+            try {
+                ctx.startService(android.content.Intent(ctx, ScreenStreamService::class.java)
+                    .setAction(ScreenStreamService.ACTION_STOP))
+            } catch (_: Exception) {}
+        }
         return true
     }
 

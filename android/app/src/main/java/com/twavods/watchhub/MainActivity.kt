@@ -6,7 +6,13 @@ import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import android.media.projection.MediaProjectionManager
+import androidx.compose.material3.Slider
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.core.content.ContextCompat
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -80,6 +86,38 @@ fun rememberTicker(): Int {
     return tick
 }
 
+/** Stream a piece of the Google Maps map to the watch (screen recording while Maps is open). */
+@Composable
+private fun MapControls() {
+    val ctx = LocalContext.current
+    val running = ScreenStreamService.runningFor(ScreenStreamService.TARGET_MAP)
+    var mapTop by remember { mutableFloatStateOf(Prefs.mapTop(ctx)) }
+    val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+        val data = res.data
+        if (res.resultCode == android.app.Activity.RESULT_OK && data != null) {
+            val i = Intent(ctx, ScreenStreamService::class.java)
+                .putExtra(ScreenStreamService.EXTRA_CODE, res.resultCode)
+                .putExtra(ScreenStreamService.EXTRA_DATA, data)
+                .putExtra(ScreenStreamService.EXTRA_TARGET, ScreenStreamService.TARGET_MAP)
+            ContextCompat.startForegroundService(ctx, i)
+        }
+    }
+    Hint("Kaart op je horloge: WatchHub neemt het scherm van Google Maps op en stuurt het stuk rond je positie door " +
+        "(ongeveer 1 beeld per seconde). Google Maps moet daarvoor open staan op je telefoon.")
+    if (running) {
+        OutlinedButton(onClick = {
+            ctx.startService(Intent(ctx, ScreenStreamService::class.java).setAction(ScreenStreamService.ACTION_STOP))
+        }) { Text("Kaart stoppen") }
+        Hint("Uitsnede (hoogte op het scherm): ${(mapTop * 100).toInt()}%")
+        Slider(value = mapTop, onValueChange = { mapTop = it; Prefs.setMapTop(ctx, it) }, valueRange = 0f..0.6f)
+    } else {
+        FilledTonalButton(onClick = {
+            val mpm = ctx.getSystemService(MediaProjectionManager::class.java)
+            consent.launch(mpm.createScreenCaptureIntent())
+        }) { Text("Kaart naar horloge sturen") }
+    }
+}
+
 @Composable
 private fun HomeScreen() {
     val ctx = LocalContext.current
@@ -147,6 +185,7 @@ private fun HomeScreen() {
                     if (nav.street.isNotEmpty()) Text(nav.street, color = HubBlue)
                     if (nav.eta.isNotEmpty()) Hint(nav.eta)
                 }
+                MapControls()
             }
 
             HubCard("Oproepen", Icons.Filled.Call, HubGreen) {

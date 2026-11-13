@@ -50,6 +50,12 @@ object WatchLink {
     }
 
     @Volatile var source: Source? = null
+    /** Map picture (screen recording of Google Maps), shown on the watch's navigation page. */
+    @Volatile var mapSource: Source? = null
+    /** The source the watch is streaming from right now. */
+    @Volatile private var active: Source? = null
+    /** Minimum time between frames; the map needs far fewer frames than the camera. */
+    @Volatile private var minIntervalMs = 160L
 
     const val PAGE_HOME = "/pages/index"
     const val PAGE_CAMERA = "/pages/camera"
@@ -91,8 +97,6 @@ object WatchLink {
 
     private const val CHUNK = 8000
     private const val WINDOW = 2
-    /** At most ~6 frames per second: faster makes the watch run hot and unstable. */
-    private const val MIN_INTERVAL_MS = 160L
 
     fun init(context: Context) {
         if (initialized) return
@@ -217,11 +221,16 @@ object WatchLink {
         } catch (_: Exception) { lastError = "onbekend bericht: ${text.take(60)}"; return }
         when (msg.optString("cmd")) {
             "start" -> {
-                if (source == null) {
-                    // Camera screen on the phone is not open
-                    send(JSONObject().put("t", "nocam"))
+                val wantMap = msg.optString("src") == "map"
+                val src = if (wantMap) mapSource else source
+                if (src == null) {
+                    // Camera screen (or map recording) on the phone is not running
+                    send(JSONObject().put("t", if (wantMap) "nomap" else "nocam"))
                     return
                 }
+                if (active !== src) lastSentJpeg = null
+                active = src
+                minIntervalMs = msg.optLong("r", 160L).coerceIn(100L, 5000L)
                 if (msg.has("m")) fillMode = msg.optString("m") != "fit"
                 streaming = true; inFlight.clear(); sendNextFrame()
             }
@@ -307,7 +316,7 @@ object WatchLink {
      */
     private fun sendNextFrame() {
         if (!streaming || transmitting || inFlight.size >= WINDOW) return
-        val wait = MIN_INTERVAL_MS - (SystemClock.elapsedRealtime() - lastSendMs)
+        val wait = minIntervalMs - (SystemClock.elapsedRealtime() - lastSendMs)
         if (wait > 0) {
             if (!retryPosted) {
                 retryPosted = true
@@ -315,7 +324,7 @@ object WatchLink {
             }
             return
         }
-        val jpeg = source?.latestJpeg()
+        val jpeg = active?.latestJpeg()
         if (jpeg == null || jpeg === lastSentJpeg) {
             if (!retryPosted) {
                 retryPosted = true

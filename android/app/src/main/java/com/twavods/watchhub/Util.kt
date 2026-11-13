@@ -22,6 +22,13 @@ object Prefs {
     fun setCropTop(ctx: Context, v: Float) =
         ctx.getSharedPreferences(NAME, 0).edit().putFloat("cropTop", v).apply()
 
+    /** Top of the square cut out of Google Maps, as a fraction of the screen height. */
+    fun mapTop(ctx: Context): Float =
+        ctx.getSharedPreferences(NAME, 0).getFloat("mapTop", 0.30f)
+
+    fun setMapTop(ctx: Context, v: Float) =
+        ctx.getSharedPreferences(NAME, 0).edit().putFloat("mapTop", v).apply()
+
     /** Vertical position of the Xiaomi camera shutter button, as a fraction of the screen height. */
     fun shutterY(ctx: Context): Float =
         ctx.getSharedPreferences(NAME, 0).getFloat("shutterY", 0.88f)

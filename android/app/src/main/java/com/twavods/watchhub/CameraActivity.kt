@@ -123,7 +123,7 @@ class CameraActivity : ComponentActivity(), WatchLink.Source {
     }
 
     private fun useOwnCamera() {
-        if (ScreenStreamService.running) return
+        if (ScreenStreamService.runningFor(ScreenStreamService.TARGET_CAMERA)) return
         WatchLink.source = this
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
             == PackageManager.PERMISSION_GRANTED
@@ -204,7 +204,7 @@ class CameraActivity : ComponentActivity(), WatchLink.Source {
     }
 
     private fun toggleXiaomiMode() {
-        if (ScreenStreamService.running) {
+        if (ScreenStreamService.runningFor(ScreenStreamService.TARGET_CAMERA)) {
             startService(Intent(this, ScreenStreamService::class.java).setAction(ScreenStreamService.ACTION_STOP))
             main.postDelayed({ useOwnCamera() }, 300)
             return
@@ -224,7 +224,7 @@ class CameraActivity : ComponentActivity(), WatchLink.Source {
             analysisUseCase?.targetRotation = rot
             imageCapture?.targetRotation = rot
         }
-        val xiaomi = ScreenStreamService.running
+        val xiaomi = ScreenStreamService.runningFor(ScreenStreamService.TARGET_CAMERA)
         xiaomiBtn.text = if (xiaomi) "Stop Xiaomi-camera" else "Xiaomi-camera"
         tapBtn.text = if (CameraTapService.instance != null) "Sluiter-toegang ✓" else "Sluiter-toegang"
         statusView.text = buildString {
@@ -254,7 +254,7 @@ class CameraActivity : ComponentActivity(), WatchLink.Source {
     }
 
     private fun bindCamera() {
-        if (ScreenStreamService.running) return
+        if (ScreenStreamService.runningFor(ScreenStreamService.TARGET_CAMERA)) return
         val provider = cameraProvider ?: return
         val preview = Preview.Builder().build().also {
             it.setSurfaceProvider(previewView.surfaceProvider)

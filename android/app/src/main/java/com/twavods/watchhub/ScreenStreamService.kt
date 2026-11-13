@@ -34,10 +34,17 @@ class ScreenStreamService : Service(), WatchLink.Source {
     companion object {
         const val EXTRA_CODE = "code"
         const val EXTRA_DATA = "data"
+        const val EXTRA_TARGET = "target"
+        const val TARGET_CAMERA = "camera"
+        const val TARGET_MAP = "map"
         const val ACTION_STOP = "com.twavods.watchhub.STOP"
         private const val CHANNEL = "watchcam"
         @Volatile var running = false
             private set
+        /** What is being recorded: the Xiaomi camera or the Google Maps map. */
+        @Volatile var target = TARGET_CAMERA
+            private set
+        fun runningFor(t: String) = running && target == t
         @Volatile var lastError = ""
     }
 
@@ -57,6 +64,7 @@ class ScreenStreamService : Service(), WatchLink.Source {
             stopSelf()
             return START_NOT_STICKY
         }
+        if (projection == null) target = intent?.getStringExtra(EXTRA_TARGET) ?: TARGET_CAMERA
         startInForeground()
         if (!::orientation.isInitialized) orientation = DeviceOrientation(this)
         orientation.start()
@@ -97,9 +105,14 @@ class ScreenStreamService : Service(), WatchLink.Source {
 
         running = true
         lastError = ""
-        WatchLink.source = this
-        WatchLink.kick()
-        launchXiaomiCamera()
+        if (target == TARGET_MAP) {
+            WatchLink.mapSource = this
+            bringMapsToFront()
+        } else {
+            WatchLink.source = this
+            WatchLink.kick()
+            launchXiaomiCamera()
+        }
         return START_NOT_STICKY
     }
 
@@ -107,6 +120,7 @@ class ScreenStreamService : Service(), WatchLink.Source {
         running = false
         if (::orientation.isInitialized) orientation.stop()
         if (WatchLink.source === this) WatchLink.source = null
+        if (WatchLink.mapSource === this) WatchLink.mapSource = null
         try { display?.release() } catch (_: Exception) {}
         try { reader?.close() } catch (_: Exception) {}
         try { projection?.stop() } catch (_: Exception) {}
@@ -134,7 +148,10 @@ class ScreenStreamService : Service(), WatchLink.Source {
         )
         val n: Notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_menu_camera)
-            .setContentTitle("WatchHub stuurt de Xiaomi-camera naar je horloge")
+            .setContentTitle(
+                if (target == TARGET_MAP) "WatchHub stuurt de kaart naar je horloge"
+                else "WatchHub stuurt de Xiaomi-camera naar je horloge"
+            )
             .setContentText("Tik om WatchHub te openen")
             .setContentIntent(open)
             .addAction(0, "Stoppen", stop)
@@ -142,6 +159,12 @@ class ScreenStreamService : Service(), WatchLink.Source {
             .build()
         val type = if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION else 0
         ServiceCompat.startForeground(this, 1, n, type)
+    }
+
+    private fun bringMapsToFront() {
+        val launch = packageManager.getLaunchIntentForPackage(NavHandler.MAPS) ?: return
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        try { startActivity(launch) } catch (_: Exception) {}
     }
 
     private fun launchXiaomiCamera() {
@@ -156,7 +179,7 @@ class ScreenStreamService : Service(), WatchLink.Source {
         val img = rd.acquireLatestImage() ?: return
         try {
             val now = SystemClock.elapsedRealtime()
-            if (now - lastFrameMs < 50) return
+            if (now - lastFrameMs < (if (target == TARGET_MAP) 500 else 50)) return
             lastFrameMs = now
 
             val plane = img.planes[0]
@@ -169,6 +192,15 @@ class ScreenStreamService : Service(), WatchLink.Source {
 
             val side = minOf(img.width, img.height)
             val left = (img.width - side) / 2
+            if (target == TARGET_MAP) {
+                // The map around your position: a square at the chosen height of the screen
+                val top = (Prefs.mapTop(this) * img.height).toInt().coerceIn(0, img.height - side)
+                val square = Bitmap.createBitmap(full, left, top, side, side)
+                latest.set(frameToJpeg(square, true))
+                if (square !== full) square.recycle()
+                full.recycle()
+                return
+            }
             val squareTop = (Prefs.cropTop(this) * img.height).toInt().coerceIn(0, img.height - side)
             // The Xiaomi viewfinder is 3:4, centred on the square cut-out
             val (top, height) = if (WatchLink.fillMode) squareTop to side else {
