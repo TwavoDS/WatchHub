@@ -204,7 +204,16 @@ private fun HomeScreen() {
                 }
             }
 
-            HubCard("Horloge", Icons.Filled.Settings, HubBlue) {
+            HubCard("Horloge en toegang", Icons.Filled.Settings, HubBlue) {
+                StatusLine(access && HubNotificationService.connected,
+                    when {
+                        !access -> "Geen toegang tot meldingen"
+                        !HubNotificationService.connected -> "Toegang gegeven, maar de dienst draait nog niet — zet hem uit en weer aan"
+                        else -> "Toegang tot meldingen: actief"
+                    })
+                OutlinedButton(onClick = { ctx.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }) {
+                    Text("Toegang tot meldingen")
+                }
                 if (WatchLink.lastLaunch.isNotEmpty()) Hint("App openen: ${WatchLink.lastLaunch}")
                 if (WatchLink.lastError.isNotEmpty()) Hint("Laatste fout: ${WatchLink.lastError}")
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
