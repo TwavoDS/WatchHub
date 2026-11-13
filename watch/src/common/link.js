@@ -5,6 +5,7 @@
 import interconnect from '@system.interconnect'
 import file from '@system.file'
 import vibrator from '@system.vibrator'
+import router from '@system.router'
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 let B64_LOOKUP = null
@@ -98,6 +99,14 @@ function onMessage(raw) {
       break
     case 'icon':
       saveIcon(msg.pkg, msg.d)
+      return
+    case 'goto':
+      // The phone opened the app for a notification or navigation: jump straight there,
+      // unless you are busy on another page
+      if ((state.page === '' || state.page === 'home') && msg.p) {
+        state.page = msg.p
+        router.push({ uri: '/pages/' + msg.p })
+      }
       return
   }
   emit(msg)

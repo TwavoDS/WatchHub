@@ -162,8 +162,14 @@ class HubNotificationService : NotificationListenerService() {
         if (watchPage.isEmpty() || watchPage == "home") {
             val wasClosed = watchPage.isEmpty()
             WatchLink.openOnWatch(WatchLink.PAGE_NOTIF)
-            // Give a closed watch app a moment to start, so it gets (and vibrates for) the message
-            if (wasClosed) main.postDelayed({ WatchLink.post(json) }, 2000) else WatchLink.post(json)
+            // Give a closed watch app a moment to start, then jump to the notification
+            // screen (the watch opens on its start page) and send the notification
+            val goto = JSONObject().put("t", "goto").put("p", "notif")
+            if (wasClosed) {
+                main.postDelayed({ WatchLink.post(goto); WatchLink.post(json) }, 2000)
+            } else {
+                WatchLink.post(goto); WatchLink.post(json)
+            }
         } else {
             WatchLink.post(json)
         }

@@ -85,6 +85,11 @@ class NavHandler(private val ctx: Context) {
         if (!navigating) {
             navigating = true
             WatchLink.openOnWatch(WatchLink.PAGE_NAV)
+            // The watch opens on its start page; tell it to go to the navigation screen
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                WatchLink.post(JSONObject().put("t", "goto").put("p", "nav"))
+                resendFull()
+            }, 2000)
         }
 
         // Google Maps updates very often; skip identical updates
