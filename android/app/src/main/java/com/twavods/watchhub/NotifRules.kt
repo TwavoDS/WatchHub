@@ -20,11 +20,13 @@ data class AppRule(
     val blockWords: String = "",
     /** "popup": normal watch notification that pops up at once; "screen": WatchHub's own screen. */
     val display: String = "screen",
+    /** Seconds the WatchHub screen stays open before closing by itself; 0 = until you close it. */
+    val duration: Int = 10,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("enabled", enabled).put("vib", vib).put("color", color)
         .put("repeatMin", repeatMin).put("onlyWords", onlyWords).put("blockWords", blockWords)
-        .put("display", display)
+        .put("display", display).put("duration", duration)
 
     companion object {
         fun fromJson(o: JSONObject) = AppRule(
@@ -35,6 +37,7 @@ data class AppRule(
             onlyWords = o.optString("onlyWords", ""),
             blockWords = o.optString("blockWords", ""),
             display = o.optString("display", "screen"),
+            duration = o.optInt("duration", 10),
         )
     }
 }
@@ -68,6 +71,9 @@ object NotifRules {
         "screen" to "WatchHub-scherm: springt open met eigen trilpatroon, kleur en icoon",
         "popup" to "Gewone horlogemelding (zonder WatchHub-scherm)",
     )
+
+    val DURATIONS = linkedMapOf(5 to "5 seconden", 10 to "10 seconden", 20 to "20 seconden",
+        30 to "30 seconden", 60 to "1 minuut", 0 to "Blijven staan")
 
     val REPEATS = linkedMapOf(0 to "Niet herhalen", 1 to "Elke minuut", 2 to "Elke 2 minuten",
         5 to "Elke 5 minuten", 10 to "Elke 10 minuten")
@@ -118,6 +124,24 @@ object NotifRules {
         val now = c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE)
         return if (s < e) now in s until e else now >= s || now < e
     }
+
+    // ---- Calls ------------------------------------------------------------------
+
+    /** Show incoming calls on the watch with Answer / Decline. */
+    fun callsEnabled(ctx: Context) = prefs(ctx).getBoolean("calls", true)
+    fun setCallsEnabled(ctx: Context, v: Boolean) = prefs(ctx).edit().putBoolean("calls", v).apply()
+
+    // ---- Quick replies ----------------------------------------------------------
+
+    private val DEFAULT_REPLIES = listOf("Oké 👍", "Ik bel je zo terug", "Onderweg!", "Nu even niet", "Bedankt!")
+
+    fun replies(ctx: Context): List<String> {
+        val raw = prefs(ctx).getString("replies", null) ?: return DEFAULT_REPLIES
+        return raw.split('\n').map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { DEFAULT_REPLIES }
+    }
+
+    fun setReplies(ctx: Context, list: List<String>) =
+        prefs(ctx).edit().putString("replies", list.joinToString("\n")).apply()
 
     fun words(s: String) = s.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
 }

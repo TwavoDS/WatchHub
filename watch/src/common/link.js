@@ -52,7 +52,9 @@ function newState() {
     notifs: [],             // newest first: {id, pkg, app, title, text, color, vib, time}
     icons: {},              // pkg -> uri of a saved icon
     iconAsked: {},
-    page: ''
+    page: '',
+    openId: null,       // notification to show as soon as the notification page opens
+    autoClose: false    // the app was opened for a notification: exit after its display time
   }
 }
 
@@ -100,14 +102,25 @@ function onMessage(raw) {
     case 'icon':
       saveIcon(msg.pkg, msg.d)
       return
-    case 'goto':
-      // The phone opened the app for a notification or navigation: jump straight there,
-      // unless you are busy on another page
+    case 'goto': {
+      // The phone opened the app for a notification or navigation. The notification
+      // itself travels inside this message, so the screen never shows an older one first.
+      const n = msg.n
+      if (n) {
+        state.notifs = [n].concat(state.notifs.filter((x) => x.id !== n.id)).slice(0, 20)
+        if (!n.quiet && n.vib) vibrate(n.vib)
+        requestIcon(n.pkg)
+        state.openId = n.id
+      }
       if ((state.page === '' || state.page === 'home') && msg.p) {
         state.page = msg.p
+        state.autoClose = true   // opened by the phone: close the app again after the display time
         router.push({ uri: '/pages/' + msg.p })
+      } else if (n) {
+        emit(n)
       }
       return
+    }
   }
   emit(msg)
 }
@@ -186,3 +199,11 @@ export function dismiss(id) {
 }
 
 export function sync() { send({ cmd: 'sync' }) }
+
+/** Takes (and clears) the notification the notification page should open. */
+export function takeOpenId() { const id = state.openId; state.openId = null; return id }
+export function takeAutoClose() { const v = state.autoClose; state.autoClose = false; return v }
+
+export function action(id, i) { send({ cmd: 'action', id: id, i: i }) }
+export function reply(id, text) { send({ cmd: 'reply', id: id, text: text }) }
+export function findPhone(on) { send({ cmd: 'findphone', on: on }) }

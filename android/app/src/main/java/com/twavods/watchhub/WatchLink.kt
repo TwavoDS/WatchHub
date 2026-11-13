@@ -102,6 +102,7 @@ object WatchLink {
         messageApi = Wearable.getMessageApi(app)
         authApi = Wearable.getAuthApi(app)
         notifyApi = Wearable.getNotifyApi(app)
+        handlers["findphone"] = { m -> if (m.optBoolean("on")) FindPhone.start(app) else FindPhone.stop() }
     }
 
     private val listener = OnMessageReceivedListener { _, bytes ->

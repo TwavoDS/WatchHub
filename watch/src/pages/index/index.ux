@@ -16,6 +16,10 @@
       <text class="label">Meldingen</text>
       <text if="{{count > 0}}" class="badge">{{count}}</text>
     </div>
+    <div class="item small {{ringing ? 'item-on' : ''}}" onclick="toggleFind">
+      <div class="dot dot-find"></div>
+      <text class="label label-small">{{ringing ? 'Stop zoeken' : 'Zoek telefoon'}}</text>
+    </div>
   </div>
 </template>
 
@@ -28,7 +32,8 @@ let unlisten = null
 export default {
   private: {
     status: 'Verbinden…',
-    count: 0
+    count: 0,
+    ringing: false
   },
 
   onShow() {
@@ -53,6 +58,11 @@ export default {
     this.count = link.notifs().length
   },
 
+  toggleFind() {
+    this.ringing = !this.ringing
+    link.findPhone(this.ringing)
+  },
+
   goCamera() { router.push({ uri: '/pages/camera' }) },
   goNav() { router.push({ uri: '/pages/nav' }) },
   goNotif() { router.push({ uri: '/pages/notif' }) }
@@ -66,22 +76,22 @@ export default {
   background-color: #000000;
   flex-direction: column;
   align-items: center;
-  padding-top: 50px;
+  padding-top: 36px;
 }
 .title {
-  font-size: 40px;
+  font-size: 34px;
   font-weight: bold;
   color: #4fc3f7;
 }
 .status {
   font-size: 20px;
   color: #888888;
-  margin-bottom: 14px;
+  margin-bottom: 6px;
 }
 .item {
   width: 320px;
-  height: 88px;
-  margin-top: 12px;
+  height: 74px;
+  margin-top: 8px;
   border-radius: 44px;
   background-color: #1e1e1e;
   flex-direction: row;
@@ -102,6 +112,19 @@ export default {
 }
 .dot-notif {
   background-color: #66bb6a;
+}
+.small {
+  height: 64px;
+  width: 260px;
+}
+.item-on {
+  background-color: #b71c1c;
+}
+.dot-find {
+  background-color: #ffca28;
+}
+.label-small {
+  font-size: 26px;
 }
 .label {
   font-size: 32px;

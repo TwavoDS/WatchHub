@@ -1,8 +1,11 @@
 package com.twavods.watchhub
 
 import android.app.Notification
+import android.app.RemoteInput
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -16,19 +19,23 @@ import java.io.ByteArrayOutputStream
 /**
  * Sees every notification on the phone.
  *  - Google Maps navigation goes to [NavHandler].
+ *  - Incoming calls are shown with Answer / Decline.
  *  - Apps that are switched on in WatchHub are shown on the watch with their own
- *    vibration, colour and (optionally) a repeating reminder until dismissed.
+ *    vibration, colour, display time, buttons and quick replies.
  *
  * Phone -> watch:
- *   {"t":"notif","id":N,"pkg":P,"app":"WhatsApp","title":..,"text":..,"color":"#25D366",
- *    "vib":"SS","time":"14:32","quiet":false}
- *   {"t":"remind","id":N,"vib":"SS"}     still unread
- *   {"t":"gone","id":N}                  removed on the phone
- *   {"t":"list","items":[notif...]}      all current notifications (answer to "sync")
+ *   {"t":"notif","id":N,"pkg":P,"app":..,"title":..,"text":..,"color":"#25D366","vib":"SS",
+ *    "time":"14:32","quiet":false,"dur":10,"call":false,
+ *    "actions":[{"i":0,"title":"Markeren als gelezen"}],"replies":["Oké 👍",...]}
+ *   {"t":"goto","p":"notif","n":{notif}}   open the notification screen with this notification
+ *   {"t":"remind","id":N,"vib":"SS"}       still unread
+ *   {"t":"gone","id":N}                    removed on the phone
+ *   {"t":"list","items":[notif...]}        all current notifications (answer to "sync")
  *   {"t":"icon","pkg":P,"d":"<base64 png>"}
  *
  * Watch -> phone:
- *   {"cmd":"dismiss","id":N}   {"cmd":"sync"}   {"cmd":"icon","pkg":P}   {"cmd":"page","p":"camera"}
+ *   {"cmd":"dismiss","id":N}  {"cmd":"action","id":N,"i":I}  {"cmd":"reply","id":N,"text":".."}
+ *   {"cmd":"sync"}  {"cmd":"icon","pkg":P}  {"cmd":"page","p":"camera"}  {"cmd":"findphone","on":true}
  */
 class HubNotificationService : NotificationListenerService() {
 
@@ -41,9 +48,17 @@ class HubNotificationService : NotificationListenerService() {
         @Volatile var watchPage = ""
         private const val ICON_SIZE = 72
         private const val MAX_ITEMS = 20
+        private const val MAX_ACTIONS = 3
     }
 
-    private class Item(val id: Int, val key: String, val json: JSONObject, val rule: AppRule)
+    private class Item(
+        val id: Int,
+        val key: String,
+        val json: JSONObject,
+        val rule: AppRule,
+        val actions: List<Notification.Action>,
+        val replyAction: Notification.Action?,
+    )
 
     private val main = Handler(Looper.getMainLooper())
     private lateinit var nav: NavHandler
@@ -61,8 +76,11 @@ class HubNotificationService : NotificationListenerService() {
         WatchLink.handlers["hello"] = { nav.resendFull() }
         WatchLink.handlers["sync"] = { sendList() }
         WatchLink.handlers["dismiss"] = { m -> dismissFromWatch(m.optInt("id")) }
+        WatchLink.handlers["action"] = { m -> runAction(m.optInt("id"), m.optInt("i")) }
+        WatchLink.handlers["reply"] = { m -> reply(m.optInt("id"), m.optString("text")) }
         WatchLink.handlers["icon"] = { m -> sendIcon(m.optString("pkg")) }
         WatchLink.handlers["page"] = { m -> watchPage = m.optString("p") }
+        WatchLink.handlers["findphone"] = { m -> if (m.optBoolean("on")) FindPhone.start(this) else FindPhone.stop() }
         try {
             activeNotifications?.forEach { if (it.packageName == NavHandler.MAPS) nav.onPosted(it) }
         } catch (_: Exception) {}
@@ -73,23 +91,35 @@ class HubNotificationService : NotificationListenerService() {
         if (instance === this) instance = null
     }
 
+    private fun nextNumber(): Int { val id = nextId; nextId += 1; return id }
+
+    private fun idFor(key: String): Int {
+        val existing = idsByKey[key]
+        if (existing != null) return existing
+        val id = nextNumber()
+        idsByKey[key] = id
+        return id
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (!::nav.isInitialized) return
         if (nav.onPosted(sbn)) return
         if (sbn.packageName == packageName) return
         val n = sbn.notification ?: return
-        // Skip group summaries and ongoing things like music players and downloads
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
+
+        if (n.category == Notification.CATEGORY_CALL) {
+            if (NotifRules.callsEnabled(this)) forwardCall(sbn, n)
+            return
+        }
+        // Skip ongoing things like music players and downloads
         if (n.flags and Notification.FLAG_ONGOING_EVENT != 0) return
 
         NotifRules.markSeen(this, sbn.packageName)
         val rule = NotifRules.get(this, sbn.packageName)
         if (!rule.enabled) return
 
-        val e = n.extras
-        val title = e?.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim().orEmpty()
-        val text = (e?.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: e?.getCharSequence(Notification.EXTRA_TEXT))
-            ?.toString()?.trim().orEmpty()
+        val (title, text) = texts(n)
         if (title.isEmpty() && text.isEmpty()) return
 
         // Apps re-post the same notification often; only forward real changes
@@ -107,31 +137,40 @@ class HubNotificationService : NotificationListenerService() {
         }
         val quiet = NotifRules.isQuietNow(this)
 
-        val id = idsByKey[sbn.key] ?: run {
-            val newId = nextId
-            nextId += 1
-            idsByKey[sbn.key] = newId
-            newId
-        }
-        val json = JSONObject()
-            .put("t", "notif")
-            .put("id", id)
-            .put("pkg", sbn.packageName)
-            .put("app", appLabel(sbn.packageName))
-            .put("title", title.take(80))
-            .put("text", text.take(400))
-            .put("color", rule.color)
-            .put("vib", if (quiet) "" else rule.vib)
-            .put("time", android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date(sbn.postTime)))
+        val id = idFor(sbn.key)
+        val (actions, replyAction) = splitActions(n)
+        val json = baseJson(id, sbn.packageName, title, text, rule.color, if (quiet) "" else rule.vib, sbn.postTime)
             .put("quiet", quiet)
-        items.remove(id)
-        items[id] = Item(id, sbn.key, json, rule)
-        while (items.size > MAX_ITEMS) items.remove(items.keys.first())
+            .put("dur", rule.duration)
+            .put("call", false)
+        putActions(json, actions, replyAction)
 
+        remember(Item(id, sbn.key, json, rule, actions, replyAction))
         forwarded++
         lastInfo = "doorgestuurd: ${appLabel(sbn.packageName)}"
         deliver(json, rule, quiet, reminder = false)
         if (!quiet) scheduleRepeat(id, rule)
+    }
+
+    /** Incoming (or ongoing) call: always on the WatchHub screen, buzzing, with the call buttons. */
+    private fun forwardCall(sbn: StatusBarNotification, n: Notification) {
+        val (title, text) = texts(n)
+        val sig = "$title|$text"
+        if (lastText[sbn.key] == sig) return
+        lastText[sbn.key] = sig
+        val id = idFor(sbn.key)
+        val (actions, _) = splitActions(n)
+        // A ringing call has (at least) Answer and Decline
+        val ringing = actions.size >= 2
+        val rule = AppRule(enabled = true, vib = if (ringing) "LLL" else "", color = "#66BB6A", duration = 0, display = "screen")
+        val json = baseJson(id, sbn.packageName, title.ifEmpty { "Oproep" }, text, rule.color, rule.vib, sbn.postTime)
+            .put("quiet", false)
+            .put("dur", 0)
+            .put("call", true)
+        putActions(json, actions, null)
+        remember(Item(id, sbn.key, json, rule, actions, null))
+        lastInfo = "oproep: ${title.ifEmpty { "onbekend" }}"
+        deliver(json, rule, quiet = false, reminder = false)
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
@@ -145,31 +184,69 @@ class HubNotificationService : NotificationListenerService() {
         }
     }
 
+    // ---- Building messages ---------------------------------------------------------
+
+    private fun texts(n: Notification): Pair<String, String> {
+        val e = n.extras
+        val title = e?.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim().orEmpty()
+        val text = (e?.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: e?.getCharSequence(Notification.EXTRA_TEXT))
+            ?.toString()?.trim().orEmpty()
+        return title to text
+    }
+
+    private fun baseJson(id: Int, pkg: String, title: String, text: String, color: String, vib: String, time: Long) =
+        JSONObject()
+            .put("t", "notif")
+            .put("id", id)
+            .put("pkg", pkg)
+            .put("app", appLabel(pkg))
+            .put("title", title.take(80))
+            .put("text", text.take(400))
+            .put("color", color)
+            .put("vib", vib)
+            .put("time", android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date(time)))
+
+    /** Buttons of the notification, and the one that takes a typed reply (if any). */
+    private fun splitActions(n: Notification): Pair<List<Notification.Action>, Notification.Action?> {
+        val all = n.actions?.toList().orEmpty()
+        val reply = all.firstOrNull { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true }
+        val buttons = all.filter { it !== reply && it.actionIntent != null && !it.title.isNullOrBlank() }
+            .take(MAX_ACTIONS)
+        return buttons to reply
+    }
+
+    private fun putActions(json: JSONObject, actions: List<Notification.Action>, reply: Notification.Action?) {
+        val arr = JSONArray()
+        actions.forEachIndexed { i, a -> arr.put(JSONObject().put("i", i).put("title", a.title.toString().take(24))) }
+        json.put("actions", arr)
+        json.put("replies", if (reply != null) JSONArray(NotifRules.replies(this)) else JSONArray())
+    }
+
+    private fun remember(item: Item) {
+        items.remove(item.id)
+        items[item.id] = item
+        while (items.size > MAX_ITEMS) items.remove(items.keys.first())
+    }
+
     /** Shows the notification on the watch in the way chosen for this app. */
     private fun deliver(json: JSONObject, rule: AppRule, quiet: Boolean, reminder: Boolean) {
         if (rule.display == "popup") {
             // Normal watch notification: pops up immediately, wherever you are on the watch.
-            // During quiet hours it only goes into the WatchHub list (no pop-up, no buzz).
             if (!quiet) {
                 val title = json.optString("app") + (json.optString("title").let { if (it.isEmpty()) "" else " · $it" })
                 WatchLink.notify(if (reminder) "🔔 $title" else title, json.optString("text"))
             }
-            // Keep it in the WatchHub list too (if the app is open), without its own buzz
             WatchLink.post(JSONObject(json.toString()).put("vib", ""))
             return
         }
-        // WatchHub screen: open it, unless the watch is busy with camera or navigation
+        // WatchHub screen: open it with this notification in it, unless the watch is busy
+        // with camera or navigation (then it only buzzes and shows a short banner)
         if (watchPage.isEmpty() || watchPage == "home") {
             val wasClosed = watchPage.isEmpty()
             WatchLink.openOnWatch(WatchLink.PAGE_NOTIF)
-            // Give a closed watch app a moment to start, then jump to the notification
-            // screen (the watch opens on its start page) and send the notification
-            val goto = JSONObject().put("t", "goto").put("p", "notif")
-            if (wasClosed) {
-                main.postDelayed({ WatchLink.post(goto); WatchLink.post(json) }, 2000)
-            } else {
-                WatchLink.post(goto); WatchLink.post(json)
-            }
+            // The notification travels inside the "goto", so the screen never shows an older one first
+            val goto = JSONObject().put("t", "goto").put("p", "notif").put("n", json)
+            if (wasClosed) main.postDelayed({ WatchLink.post(goto) }, 1800) else WatchLink.post(goto)
         } else {
             WatchLink.post(json)
         }
@@ -187,8 +264,7 @@ class HubNotificationService : NotificationListenerService() {
                     main.postDelayed(this, rule.repeatMin * 60_000L); return
                 }
                 val item = items[id]
-                if (rule.display == "popup" && item != null) deliver(item.json, rule, quiet = false, reminder = true)
-                else WatchLink.post(JSONObject().put("t", "remind").put("id", id).put("vib", rule.vib.ifEmpty { "S" }))
+                if (item != null) deliver(item.json, rule, quiet = false, reminder = true)
                 main.postDelayed(this, rule.repeatMin * 60_000L)
             }
         }
@@ -209,6 +285,37 @@ class HubNotificationService : NotificationListenerService() {
         lastText.remove(item.key)
         // Also remove it from the phone
         try { cancelNotification(item.key) } catch (_: Exception) {}
+    }
+
+    /** Presses a button of the notification, e.g. "Markeren als gelezen" or "Opnemen". */
+    private fun runAction(id: Int, index: Int) {
+        val item = items[id] ?: return
+        val action = item.actions.getOrNull(index) ?: return
+        try {
+            action.actionIntent.send()
+            lastInfo = "knop: ${action.title}"
+        } catch (e: Exception) {
+            lastInfo = "knop mislukt: ${e.message}"
+        }
+        stopRepeat(id)
+    }
+
+    /** Sends a quick reply through the app's own reply button (like typing it on the phone). */
+    private fun reply(id: Int, text: String) {
+        val item = items[id] ?: return
+        val action = item.replyAction ?: return
+        val inputs = action.remoteInputs ?: return
+        try {
+            val intent = Intent()
+            val results = Bundle()
+            inputs.forEach { results.putCharSequence(it.resultKey, text) }
+            RemoteInput.addResultsToIntent(inputs, intent, results)
+            action.actionIntent.send(this, 0, intent)
+            lastInfo = "geantwoord: $text"
+        } catch (e: Exception) {
+            lastInfo = "antwoorden mislukt: ${e.message}"
+        }
+        stopRepeat(id)
     }
 
     private fun sendList() {
@@ -237,19 +344,19 @@ class HubNotificationService : NotificationListenerService() {
     /** Sends a test notification with the settings of [pkg]. */
     fun sendTest(pkg: String) {
         val rule = NotifRules.get(this, pkg)
-        val id = nextId
-        nextId += 1
-        val json = JSONObject()
-            .put("t", "notif").put("id", id).put("pkg", pkg).put("app", appLabel(pkg))
-            .put("title", "Testmelding").put("text", "Zo ziet een melding van ${appLabel(pkg)} eruit op je horloge.")
-            .put("color", rule.color).put("vib", rule.vib)
-            .put("time", android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date()))
+        val id = nextNumber()
+        val json = baseJson(id, pkg, "Testmelding", "Zo ziet een melding van ${appLabel(pkg)} eruit op je horloge.",
+            rule.color, rule.vib, System.currentTimeMillis())
             .put("quiet", false)
-        items[id] = Item(id, "test:$id", json, rule)
+            .put("dur", rule.duration)
+            .put("call", false)
+            .put("actions", JSONArray())
+            .put("replies", JSONArray(NotifRules.replies(this)))
+        remember(Item(id, "test:$id", json, rule, emptyList(), null))
         deliver(json, rule, quiet = false, reminder = false)
     }
 
-    private fun appLabel(pkg: String): String = try {
+    fun appLabel(pkg: String): String = try {
         packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
     } catch (_: Exception) { pkg }
 }

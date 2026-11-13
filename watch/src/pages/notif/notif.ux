@@ -22,15 +22,28 @@
     <!-- One notification -->
     <div if="{{open}}" class="detail">
       <scroll class="detail-scroll" scroll-y="true">
-        <div class="detail-inner">
+        <div class="detail-inner" onclick="keepOpen">
           <image if="{{cur.icon}}" class="big-icon" src="{{cur.icon}}"></image>
-          <text class="d-app" style="color: {{cur.color}};">{{cur.app}} · {{cur.time}}</text>
-          <text class="d-title">{{cur.title}}</text>
-          <text class="d-text">{{cur.text}}</text>
+          <text class="d-app" style="color: {{cur.color}};">{{cur.call ? 'Oproep' : cur.app}} · {{cur.time}}</text>
+          <text class="{{cur.call ? 'd-caller' : 'd-title'}}">{{cur.title}}</text>
+          <text if="{{cur.text}}" class="d-text">{{cur.text}}</text>
+
+          <!-- Buttons of the notification (e.g. Opnemen / Weigeren / Markeren als gelezen) -->
+          <div for="{{cur.actions}}" class="act-row">
+            <text class="act {{$item.cls}}" onclick="doAction($item.i)">{{$item.title}}</text>
+          </div>
+
+          <!-- Quick replies -->
+          <text if="{{cur.replies.length > 0}}" class="section">Snel antwoorden</text>
+          <div for="{{cur.replies}}" class="act-row">
+            <text class="reply" onclick="doReply($item)">{{$item}}</text>
+          </div>
+
           <div class="buttons">
             <text class="btn btn-back" onclick="closeItem">Terug</text>
-            <text class="btn btn-done" style="background-color: {{cur.color}};" onclick="dismissCur">Wegtikken</text>
+            <text if="{{!cur.call}}" class="btn btn-done" style="background-color: {{cur.color}};" onclick="dismissCur">Wegtikken</text>
           </div>
+          <text if="{{sent}}" class="sent">{{sent}}</text>
         </div>
       </scroll>
     </div>
@@ -40,82 +53,160 @@
 <script>
 import * as link from '../../common/link.js'
 import brightness from '@system.brightness'
+import router from '@system.router'
 
 let unlisten = null
-let autoOpen = false
+let closeTimer = null
+let autoClose = false
+
+function actClass(title) {
+  const t = String(title || '').toLowerCase()
+  if (/weiger|decline|ophang|hang up|afwijz|reject|beëindig/.test(t)) return 'act-red'
+  if (/opnem|answer|beantw|accept/.test(t)) return 'act-green'
+  return ''
+}
 
 export default {
   private: {
     items: [],
     open: false,
-    cur: {},
-    status: 'Geen meldingen'
+    cur: { actions: [], replies: [] },
+    status: 'Geen meldingen',
+    sent: ''
   },
 
   onShow() {
     link.bind(this.$app)
     unlisten = link.listen((m) => this.onMessage(m))
     link.setPage('notif')
-    link.sync()
+    autoClose = link.takeAutoClose()
     this.refresh()
-    // A new notification opens straight away
-    if (this.items.length > 0 && !this.open) this.openItem(0)
-    else autoOpen = true
+    const id = link.takeOpenId()
+    if (id !== null) this.openById(id)
+    link.sync()
   },
 
   onHide() {
     if (unlisten) { unlisten(); unlisten = null }
+    this.stopTimer()
     link.setPage('')
     try { brightness.setKeepScreenOn({ keepScreenOn: false }) } catch (e) {}
   },
 
-  refresh() {
-    this.items = link.notifs().map((n) => ({
+  toView(n) {
+    return {
       id: n.id,
       app: n.app,
       title: n.title,
       text: n.text,
       time: n.time,
       color: n.color || '#4FC3F7',
-      icon: link.iconFor(n.pkg)
-    }))
+      icon: link.iconFor(n.pkg),
+      call: !!n.call,
+      dur: typeof n.dur === 'number' ? n.dur : 10,
+      actions: (n.actions || []).map((a) => ({ i: a.i, title: a.title, cls: actClass(a.title) })),
+      replies: n.replies || []
+    }
+  },
+
+  refresh() {
+    this.items = link.notifs().map((n) => this.toView(n))
     if (this.open) {
       const still = this.items.find((i) => i.id === this.cur.id)
       if (still) this.cur = still
-      else this.open = false
+      else this.closeAfterGone()
     }
   },
 
   onMessage(m) {
     if (m.t === 'notif') {
+      link.takeOpenId()
       this.refresh()
-      this.openItem(0)
+      this.openById(m.id)
     } else if (m.t === 'list' || m.t === 'gone' || m.t === 'iconReady') {
       this.refresh()
-      if (m.t === 'list' && autoOpen && this.items.length > 0) {
-        autoOpen = false
-        this.openItem(0)
-      }
     } else if (m.t === 'linkError' || m.t === 'linkClosed') {
       if (this.items.length === 0) this.status = 'Geen verbinding met telefoon'
     }
   },
 
+  openById(id) {
+    const idx = this.items.findIndex((i) => i.id === id)
+    if (idx >= 0) this.showItem(idx, true)
+  },
+
   openItem(idx) {
+    this.showItem(idx, false)
+  },
+
+  showItem(idx, automatic) {
     const it = this.items[idx]
     if (!it) return
     this.cur = it
+    this.sent = ''
     this.open = true
+    this.stopTimer()
+    // Close by itself after the display time chosen for this app (not for calls)
+    if (automatic && it.dur > 0 && !it.call) {
+      closeTimer = setTimeout(() => this.timeUp(), it.dur * 1000)
+    }
+    try { brightness.setKeepScreenOn({ keepScreenOn: it.call || it.dur === 0 }) } catch (e) {}
+  },
+
+  stopTimer() {
+    if (closeTimer) { clearTimeout(closeTimer); closeTimer = null }
+  },
+
+  /** Any tap on the notification keeps it open. */
+  keepOpen() {
+    this.stopTimer()
+  },
+
+  timeUp() {
+    closeTimer = null
+    if (autoClose) this.leaveApp()
+    else this.open = false
+  },
+
+  closeAfterGone() {
+    // Removed on the phone (e.g. call ended)
+    this.stopTimer()
+    if (autoClose) this.leaveApp()
+    else this.open = false
+  },
+
+  leaveApp() {
+    try { this.$app.exit() } catch (e) {
+      try { router.back() } catch (e2) { this.open = false }
+    }
+  },
+
+  doAction(i) {
+    this.stopTimer()
+    link.action(this.cur.id, i)
+    this.sent = '✓'
+    if (!this.cur.call) setTimeout(() => this.dismissCur(), 600)
+  },
+
+  doReply(text) {
+    this.stopTimer()
+    link.reply(this.cur.id, text)
+    this.sent = 'Verstuurd: ' + text
+    setTimeout(() => this.dismissCur(), 1200)
   },
 
   closeItem() {
+    this.stopTimer()
+    autoClose = false
     this.open = false
   },
 
   dismissCur() {
+    this.stopTimer()
     link.dismiss(this.cur.id)
-    this.open = false
     this.refresh()
+    if (autoClose) this.leaveApp()
+    else this.open = false
   },
 
   clearAll() {
@@ -214,7 +305,7 @@ export default {
   width: 480px;
   flex-direction: column;
   align-items: center;
-  padding: 50px 70px 80px 70px;
+  padding: 50px 70px 90px 70px;
 }
 .big-icon {
   width: 72px;
@@ -231,15 +322,56 @@ export default {
   text-align: center;
   margin-top: 6px;
 }
+.d-caller {
+  font-size: 40px;
+  font-weight: bold;
+  color: #ffffff;
+  text-align: center;
+  margin-top: 10px;
+}
 .d-text {
   font-size: 26px;
   color: #dddddd;
   text-align: center;
   margin-top: 10px;
 }
+.section {
+  font-size: 20px;
+  color: #888888;
+  margin-top: 22px;
+}
+.act-row {
+  width: 320px;
+  justify-content: center;
+  margin-top: 10px;
+}
+.act {
+  width: 300px;
+  font-size: 26px;
+  color: #ffffff;
+  text-align: center;
+  padding: 16px 0;
+  border-radius: 34px;
+  background-color: #333333;
+}
+.act-green {
+  background-color: #2e7d32;
+}
+.act-red {
+  background-color: #c62828;
+}
+.reply {
+  width: 300px;
+  font-size: 24px;
+  color: #ffffff;
+  text-align: center;
+  padding: 12px 0;
+  border-radius: 30px;
+  background-color: #263238;
+}
 .buttons {
   flex-direction: row;
-  margin-top: 26px;
+  margin-top: 24px;
 }
 .btn {
   font-size: 24px;
@@ -253,5 +385,10 @@ export default {
 }
 .btn-done {
   color: #000000;
+}
+.sent {
+  font-size: 22px;
+  color: #66bb6a;
+  margin-top: 12px;
 }
 </style>
