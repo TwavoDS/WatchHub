@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tap_service_description">Laat WatchHub op de sluiterknop van de Xiaomi-camera drukken wanneer je die op je horloge indrukt. WatchHub leest alleen de camera-app en doet niets in andere apps.</string>
+</resources>

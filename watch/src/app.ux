@@ -1,0 +1,10 @@
+<script>
+export default {
+  onCreate() {
+    console.log('WatchCam started')
+  },
+  onDestroy() {
+    console.log('WatchCam stopped')
+  }
+}
+</script>
