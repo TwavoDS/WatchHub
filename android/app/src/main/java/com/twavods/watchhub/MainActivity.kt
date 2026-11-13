@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -68,6 +69,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         WatchLink.init(this)
         if (!WatchLink.permissionOk) WatchLink.connect()
+        if (!Updater.checked) Updater.check(this)
         setContent { HubTheme { HomeScreen() } }
     }
 }
@@ -204,6 +206,8 @@ private fun HomeScreen() {
                 }
             }
 
+            UpdateCard()
+
             HubCard("Horloge en toegang", Icons.Filled.Settings, HubBlue) {
                 StatusLine(access && HubNotificationService.connected,
                     when {
@@ -221,6 +225,33 @@ private fun HomeScreen() {
                     OutlinedButton(onClick = { WatchLink.openOnWatch() }) { Text("Open op horloge") }
                 }
             }
+        }
+    }
+}
+
+/** Updates of the phone and watch app from GitHub. */
+@Composable
+private fun UpdateCard() {
+    val ctx = LocalContext.current
+    val tick = rememberTicker()
+    val phoneNew = tick >= 0 && Updater.phoneUpdate(ctx)
+    val watchNew = Updater.watchUpdate()
+    HubCard("Updates", Icons.Filled.Refresh, if (phoneNew || watchNew) HubOrange else HubGreen) {
+        Hint("Telefoon: ${Updater.phoneVersionName(ctx)}" +
+            (if (phoneNew) "  →  nieuw: ${Updater.latestPhoneName}" else ""))
+        Hint("Horloge: " + (if (Updater.watchVersion > 0) "versie ${Updater.watchVersion}" else "onbekend (open WatchHub op je horloge)") +
+            (if (watchNew) "  →  nieuw: ${Updater.latestWatchName}" else ""))
+        if (Updater.status.isNotEmpty()) StatusLine(!Updater.status.startsWith("Mislukt"), Updater.status)
+        if (phoneNew) {
+            Button(onClick = { Updater.updatePhone(ctx) }, enabled = !Updater.busy) { Text("Telefoonapp bijwerken") }
+        }
+        if (watchNew) {
+            Button(onClick = { Updater.updateWatch(ctx) }, enabled = !Updater.busy) { Text("Horloge-app bijwerken") }
+            Hint("De horloge-app wordt doorgegeven aan Mi Fitness (mod) en ook in Downloads bewaard. Installeren gebeurt in Mi Fitness.")
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { Updater.check(ctx) }, enabled = !Updater.busy) { Text("Zoek updates") }
+            if (!watchNew) OutlinedButton(onClick = { Updater.updateWatch(ctx) }, enabled = !Updater.busy) { Text("Horloge-app opnieuw") }
         }
     }
 }

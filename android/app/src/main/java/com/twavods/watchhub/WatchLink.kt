@@ -268,7 +268,10 @@ object WatchLink {
             "shutter" -> shutter()
             "switch" -> source?.switchCamera()
             else -> {
-                if (msg.optString("cmd") == "hello") flushPendingGoto()
+                if (msg.optString("cmd") == "hello") {
+                    if (msg.optInt("v") > 0) Updater.watchVersion = msg.optInt("v")
+                    flushPendingGoto()
+                }
                 if (msg.optString("cmd") == "page" && msg.optString("p") != "" && msg.optString("p") != "home") pendingGoto = null
                 handlers[msg.optString("cmd")]?.invoke(msg)
             }

@@ -48,6 +48,12 @@ jobs:
           mkdir -p out
           cp android/app/build/outputs/apk/release/app-release.apk out/WatchHub-phone.apk || true
           find . -path ./node_modules -prune -o -name 'com.twavods.watchhub*.rpk' -print | head -1 | xargs -r -I{} cp {} out/WatchHub-watch.rpk
+          PV=$(grep -oP 'versionCode = \K[0-9]+' android/app/build.gradle.kts)
+          PN=$(grep -oP 'versionName = "\K[^"]+' android/app/build.gradle.kts)
+          WV=$(grep -oP '"versionCode": \K[0-9]+' watch/src/manifest.json)
+          WN=$(grep -oP '"versionName": "\K[^"]+' watch/src/manifest.json)
+          echo "{\"phone\":$PV,\"phoneName\":\"$PN\",\"watch\":$WV,\"watchName\":\"$WN\"}" > out/version.json
+          cat out/version.json
           ls -la out
 
       - name: Publish build logs (ci-logs branch)
@@ -81,3 +87,4 @@ jobs:
           files: |
             out/WatchHub-phone.apk
             out/WatchHub-watch.rpk
+            out/version.json
