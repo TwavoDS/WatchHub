@@ -12,8 +12,8 @@ android {
         applicationId = "com.twavods.watchhub"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
-        versionName = "2.2.1"
+        versionCode = 20
+        versionName = "2.3.0"
     }
 
     signingConfigs {

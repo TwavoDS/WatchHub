@@ -111,6 +111,7 @@ private fun ToolsScreen(onBack: () -> Unit) {
             // ---- Actions
             HubCard("Acties", Icons.Filled.Star, HubBlue) {
                 Hint("Tegels op je horloge (WatchHub → Acties). Een tik voert de actie uit op je telefoon:\n" +
+                    "• Zaklamp, Trillen / geluid en Muziek pauzeren werken meteen\n" +
                     "• Webadres: bv. een Home Assistant-webhook of IFTTT\n" +
                     "• Tasker: stuurt het signaal ${Actions.BROADCAST} met de naam; in Tasker vang je het met Gebeurtenis → Intent ontvangen.")
                 actions.forEachIndexed { i, a ->
@@ -120,7 +121,10 @@ private fun ToolsScreen(onBack: () -> Unit) {
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text(a.name, style = MaterialTheme.typography.bodyLarge)
-                            Hint(if (a.type == "tasker") "Tasker" else "${a.method} ${a.url.take(40)}")
+                            Hint(when (a.type) {
+                                "http" -> "${a.method} ${a.url.take(40)}"
+                                else -> Actions.TYPES[a.type] ?: a.type
+                            })
                         }
                         TextButton(onClick = { Actions.run(ctx, a.id, report = false) }) { Text("Test") }
                         Icon(Icons.Filled.Edit, contentDescription = "Aanpassen")
@@ -130,6 +134,10 @@ private fun ToolsScreen(onBack: () -> Unit) {
                     editAction = actions.size
                     draftA = Action("a" + System.currentTimeMillis().toString(36), "")
                 }) { Text("Actie toevoegen") }
+                val missing = Actions.DEFAULTS.filter { d -> actions.none { it.type == d.type } }
+                if (missing.isNotEmpty()) OutlinedButton(onClick = {
+                    actions.addAll(0, missing); Actions.save(ctx, actions.toList())
+                }) { Text("Zaklamp, trillen en muziek toevoegen") }
             }
 
             // ---- Reminders

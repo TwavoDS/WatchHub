@@ -1,3 +1,6 @@
+## Telefoon 2.3.0 · Horloge 2.0.1
+- Acties die meteen werken, zonder Home Assistant of Tasker: Zaklamp aan/uit, Trillen / geluid, Muziek pauzeren/spelen. Ze staan standaard bij Acties op je horloge (had je al acties: knop "Zaklamp, trillen en muziek toevoegen").
+
 ## Telefoon 2.2.1 · Horloge 2.0.1
 - Meldingen komen ook door als het horloge WatchHub stilletjes had afgesloten: het horloge bevestigt elke melding, en zonder bevestiging opent de telefoon WatchHub opnieuw met de melding. (Gevonden in je logboek bij het WhatsApp-bericht van 20:02.)
 

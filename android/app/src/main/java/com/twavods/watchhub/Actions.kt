@@ -39,13 +39,27 @@ data class Action(
 
 object Actions {
     const val BROADCAST = "com.twavods.watchhub.ACTION"
-    val TYPES = linkedMapOf("http" to "Webadres (Home Assistant, IFTTT…)", "tasker" to "Tasker / automatisering")
+    val TYPES = linkedMapOf(
+        "torch" to "Zaklamp aan/uit",
+        "ringer" to "Trillen / geluid",
+        "media" to "Muziek pauzeren/spelen",
+        "http" to "Webadres (Home Assistant, IFTTT…)",
+        "tasker" to "Tasker / automatisering",
+    )
+    /** Built-in actions that work without other apps; added the first time. */
+    val DEFAULTS = listOf(
+        Action("torch", "Zaklamp", "torch", color = "#FFCA28"),
+        Action("ringer", "Trillen / geluid", "ringer", color = "#4FC3F7"),
+        Action("media", "Muziek pauzeren", "media", color = "#AB47BC"),
+    )
+    private var torchOn = false
+    private var torchWatched = false
     val METHODS = linkedMapOf("POST" to "POST", "GET" to "GET")
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("watchhub_actions", Context.MODE_PRIVATE)
 
     fun list(ctx: Context): List<Action> = try {
-        val a = JSONArray(prefs(ctx).getString("list", "[]"))
+        val a = JSONArray(prefs(ctx).getString("list", null) ?: return DEFAULTS)
         (0 until a.length()).map { Action.fromJson(a.getJSONObject(it)) }
     } catch (_: Exception) { emptyList() }
 
@@ -68,6 +82,38 @@ object Actions {
             if (report) WatchLink.post(JSONObject().put("t", "actres").put("id", id).put("ok", ok).put("msg", msg.take(40)))
         }
         when (a.type) {
+            "torch" -> try {
+                val cm = ctx.getSystemService(android.hardware.camera2.CameraManager::class.java)
+                val id = cm.cameraIdList.firstOrNull { cm.getCameraCharacteristics(it)
+                    .get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true }
+                if (id == null) done(false, "geen zaklamp") else {
+                    if (!torchWatched) {
+                        torchWatched = true
+                        cm.registerTorchCallback(object : android.hardware.camera2.CameraManager.TorchCallback() {
+                            override fun onTorchModeChanged(cameraId: String, enabled: Boolean) { if (cameraId == id) torchOn = enabled }
+                        }, android.os.Handler(android.os.Looper.getMainLooper()))
+                    }
+                    torchOn = !torchOn
+                    cm.setTorchMode(id, torchOn)
+                    done(true, if (torchOn) "zaklamp aan" else "zaklamp uit")
+                }
+            } catch (e: Exception) { done(false, "zaklamp: ${e.message}") }
+            "ringer" -> try {
+                val am = ctx.getSystemService(android.media.AudioManager::class.java)
+                if (am.ringerMode == android.media.AudioManager.RINGER_MODE_NORMAL) {
+                    am.ringerMode = android.media.AudioManager.RINGER_MODE_VIBRATE
+                    done(true, "telefoon op trillen")
+                } else {
+                    am.ringerMode = android.media.AudioManager.RINGER_MODE_NORMAL
+                    done(true, "geluid aan")
+                }
+            } catch (e: SecurityException) {
+                done(false, "Niet storen staat aan")
+            } catch (e: Exception) { done(false, e.message ?: "mislukt") }
+            "media" -> {
+                MediaControl.command("toggle")
+                done(true, "muziek gepauzeerd/gestart")
+            }
             "tasker" -> {
                 ctx.sendBroadcast(Intent(BROADCAST).putExtra("name", a.name).putExtra("id", a.id))
                 done(true, "verstuurd")
