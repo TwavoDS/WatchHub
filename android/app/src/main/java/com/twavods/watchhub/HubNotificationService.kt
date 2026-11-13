@@ -130,15 +130,7 @@ class HubNotificationService : NotificationListenerService() {
 
         forwarded++
         lastInfo = "doorgestuurd: ${appLabel(sbn.packageName)}"
-        // Open the notification screen, unless the watch is busy with camera or navigation
-        if (watchPage.isEmpty() || watchPage == "home") {
-            val wasClosed = watchPage.isEmpty()
-            WatchLink.openOnWatch(WatchLink.PAGE_NOTIF)
-            // Give a closed watch app a moment to start, so it gets (and vibrates for) the message
-            if (wasClosed) main.postDelayed({ WatchLink.post(json) }, 2000) else WatchLink.post(json)
-        } else {
-            WatchLink.post(json)
-        }
+        deliver(json, rule, quiet, reminder = false)
         if (!quiet) scheduleRepeat(id, rule)
     }
 
@@ -153,6 +145,30 @@ class HubNotificationService : NotificationListenerService() {
         }
     }
 
+    /** Shows the notification on the watch in the way chosen for this app. */
+    private fun deliver(json: JSONObject, rule: AppRule, quiet: Boolean, reminder: Boolean) {
+        if (rule.display == "popup") {
+            // Normal watch notification: pops up immediately, wherever you are on the watch.
+            // During quiet hours it only goes into the WatchHub list (no pop-up, no buzz).
+            if (!quiet) {
+                val title = json.optString("app") + (json.optString("title").let { if (it.isEmpty()) "" else " · $it" })
+                WatchLink.notify(if (reminder) "🔔 $title" else title, json.optString("text"))
+            }
+            // Keep it in the WatchHub list too (if the app is open), without its own buzz
+            WatchLink.post(JSONObject(json.toString()).put("vib", ""))
+            return
+        }
+        // WatchHub screen: open it, unless the watch is busy with camera or navigation
+        if (watchPage.isEmpty() || watchPage == "home") {
+            val wasClosed = watchPage.isEmpty()
+            WatchLink.openOnWatch(WatchLink.PAGE_NOTIF)
+            // Give a closed watch app a moment to start, so it gets (and vibrates for) the message
+            if (wasClosed) main.postDelayed({ WatchLink.post(json) }, 2000) else WatchLink.post(json)
+        } else {
+            WatchLink.post(json)
+        }
+    }
+
     // ---- Reminders --------------------------------------------------------------
 
     private fun scheduleRepeat(id: Int, rule: AppRule) {
@@ -164,7 +180,9 @@ class HubNotificationService : NotificationListenerService() {
                 if (NotifRules.isQuietNow(this@HubNotificationService)) {
                     main.postDelayed(this, rule.repeatMin * 60_000L); return
                 }
-                WatchLink.post(JSONObject().put("t", "remind").put("id", id).put("vib", rule.vib.ifEmpty { "S" }))
+                val item = items[id]
+                if (rule.display == "popup" && item != null) deliver(item.json, rule, quiet = false, reminder = true)
+                else WatchLink.post(JSONObject().put("t", "remind").put("id", id).put("vib", rule.vib.ifEmpty { "S" }))
                 main.postDelayed(this, rule.repeatMin * 60_000L)
             }
         }
@@ -222,11 +240,7 @@ class HubNotificationService : NotificationListenerService() {
             .put("time", android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date()))
             .put("quiet", false)
         items[id] = Item(id, "test:$id", json, rule)
-        if (watchPage.isEmpty() || watchPage == "home") {
-            val wasClosed = watchPage.isEmpty()
-            WatchLink.openOnWatch(WatchLink.PAGE_NOTIF)
-            if (wasClosed) main.postDelayed({ WatchLink.post(json) }, 2000) else WatchLink.post(json)
-        } else WatchLink.post(json)
+        deliver(json, rule, quiet = false, reminder = false)
     }
 
     private fun appLabel(pkg: String): String = try {

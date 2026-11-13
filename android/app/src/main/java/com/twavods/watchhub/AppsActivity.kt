@@ -65,7 +65,8 @@ class AppsActivity : ComponentActivity() {
                 try { icon.setImageDrawable(packageManager.getApplicationIcon(e.pkg)) } catch (_: Exception) {}
                 val rule = NotifRules.get(this@AppsActivity, e.pkg)
                 text.text = if (rule.enabled)
-                    "${e.label}\n✓ WatchHub · ${NotifRules.PATTERNS[rule.vib] ?: rule.vib}" +
+                    "${e.label}\n✓ WatchHub · " +
+                        (if (rule.display == "popup") "pop-up" else (NotifRules.PATTERNS[rule.vib] ?: rule.vib)) +
                         (if (rule.repeatMin > 0) " · herhalen" else "")
                 else "${e.label}\nvia Mi Fitness"
                 return row
@@ -133,8 +134,10 @@ class AppsActivity : ComponentActivity() {
         val patterns = NotifRules.PATTERNS.entries.toList()
         val colors = NotifRules.COLORS.entries.toList()
         val repeats = NotifRules.REPEATS.entries.toList()
+        val displays = NotifRules.DISPLAYS.entries.toList()
 
         val enabled = Switch(this).apply { text = "Meldingen via WatchHub tonen"; isChecked = rule.enabled }
+        val display = spinner(displays.map { it.value }, displays.indexOfFirst { it.key == rule.display })
         val vib = spinner(patterns.map { it.value }, patterns.indexOfFirst { it.key == rule.vib })
         val color = spinner(colors.map { it.value }, colors.indexOfFirst { it.key.equals(rule.color, true) })
         val repeat = spinner(repeats.map { it.value }, repeats.indexOfFirst { it.key == rule.repeatMin })
@@ -145,9 +148,10 @@ class AppsActivity : ComponentActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(48, 16, 48, 0)
             addView(enabled)
-            addView(label("Trilpatroon"))
+            addView(label("Weergave op het horloge"))
+            addView(display)
+            addView(label("Trilpatroon en kleur (alleen bij WatchHub-scherm)"))
             addView(vib)
-            addView(label("Kleur op het horloge"))
             addView(color)
             addView(label("Herhalen tot je hem wegtikt op het horloge"))
             addView(repeat)
@@ -164,6 +168,7 @@ class AppsActivity : ComponentActivity() {
             repeatMin = repeats[repeat.selectedItemPosition].key,
             onlyWords = only.text.toString(),
             blockWords = block.text.toString(),
+            display = displays[display.selectedItemPosition].key,
         )
 
         AlertDialog.Builder(this)

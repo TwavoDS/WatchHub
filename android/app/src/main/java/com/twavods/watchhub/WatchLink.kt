@@ -11,6 +11,7 @@ import com.xiaomi.xms.wearable.auth.Permission
 import com.xiaomi.xms.wearable.message.MessageApi
 import com.xiaomi.xms.wearable.message.OnMessageReceivedListener
 import com.xiaomi.xms.wearable.node.NodeApi
+import com.xiaomi.xms.wearable.notify.NotifyApi
 import org.json.JSONObject
 import org.json.JSONTokener
 
@@ -62,6 +63,7 @@ object WatchLink {
     private lateinit var nodeApi: NodeApi
     private lateinit var messageApi: MessageApi
     private lateinit var authApi: AuthApi
+    private lateinit var notifyApi: NotifyApi
     private var initialized = false
     private var listening = false
 
@@ -99,6 +101,7 @@ object WatchLink {
         nodeApi = Wearable.getNodeApi(app)
         messageApi = Wearable.getMessageApi(app)
         authApi = Wearable.getAuthApi(app)
+        notifyApi = Wearable.getNotifyApi(app)
     }
 
     private val listener = OnMessageReceivedListener { _, bytes ->
@@ -256,6 +259,16 @@ object WatchLink {
         val list = ArrayList(waiting)
         waiting.clear()
         list.forEach { it() }
+    }
+
+    /**
+     * Shows a normal system notification on the watch (pops up straight away,
+     * also when the WatchHub app on the watch is closed).
+     */
+    fun notify(title: String, message: String) = whenReady {
+        val id = nodeId ?: return@whenReady
+        notifyApi.sendNotify(id, title, message)
+            .addOnFailureListener { e -> main.post { lastError = "melding: ${e.message}" } }
     }
 
     /** Sends a message to the watch app, connecting first if needed. */

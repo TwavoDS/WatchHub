@@ -18,10 +18,13 @@ data class AppRule(
     val onlyWords: String = "",
     /** Never forward when the text contains one of these words (comma separated). */
     val blockWords: String = "",
+    /** "popup": normal watch notification that pops up at once; "screen": WatchHub's own screen. */
+    val display: String = "popup",
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("enabled", enabled).put("vib", vib).put("color", color)
         .put("repeatMin", repeatMin).put("onlyWords", onlyWords).put("blockWords", blockWords)
+        .put("display", display)
 
     companion object {
         fun fromJson(o: JSONObject) = AppRule(
@@ -31,6 +34,7 @@ data class AppRule(
             repeatMin = o.optInt("repeatMin", 0),
             onlyWords = o.optString("onlyWords", ""),
             blockWords = o.optString("blockWords", ""),
+            display = o.optString("display", "popup"),
         )
     }
 }
@@ -58,6 +62,11 @@ object NotifRules {
         "#EF5350" to "Rood",
         "#AB47BC" to "Paars",
         "#FFFFFF" to "Wit",
+    )
+
+    val DISPLAYS = linkedMapOf(
+        "popup" to "Pop-up: meteen op het scherm (trillen zoals het horloge)",
+        "screen" to "WatchHub-scherm: eigen trilpatroon, kleur en icoon",
     )
 
     val REPEATS = linkedMapOf(0 to "Niet herhalen", 1 to "Elke minuut", 2 to "Elke 2 minuten",
