@@ -246,7 +246,7 @@ class HubNotificationService : NotificationListenerService() {
         for (i in 0 until replies.length()) {
             val r = replies.optString(i)
             if (TextImage.needsImage(r)) {
-                val key = "r" + Integer.toHexString(r.hashCode())
+                val key = "q" + Integer.toHexString(r.hashCode())
                 imgSources[key] = { TextImage.line(r) }
                 keys.put(key)
             } else keys.put("")

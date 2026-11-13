@@ -52,17 +52,21 @@ object TextImage {
             sb.setSpan(AbsoluteSizeSpan(25), start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             sb.setSpan(ForegroundColorSpan(Color.rgb(0xDD, 0xDD, 0xDD)), start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
-        return render(sb, width, maxHeight, 25f)
+        return render(sb, width, maxHeight, 25f, Color.BLACK)
     }
 
-    /** One short line, e.g. a quick reply with an emoji. */
-    fun line(text: String, width: Int = 280, size: Float = 23f): Result {
+    /** Colour of the quick-reply buttons on the watch (.reply in notif.ux). */
+    val REPLY_BG = Color.rgb(0x26, 0x32, 0x38)
+
+    /** One short line, e.g. a quick reply with an emoji, on the button colour so it blends in. */
+    fun line(text: String, width: Int = 280, size: Float = 22f): Result {
         val sb = SpannableStringBuilder(text)
         sb.setSpan(ForegroundColorSpan(Color.WHITE), 0, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        return render(sb, width, 48, size)
+        sb.setSpan(StyleSpan(Typeface.BOLD), 0, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        return render(sb, width, 48, size, REPLY_BG)
     }
 
-    private fun render(text: CharSequence, width: Int, maxHeight: Int, size: Float): Result {
+    private fun render(text: CharSequence, width: Int, maxHeight: Int, size: Float, bg: Int): Result {
         val paint = TextPaint(TextPaint.ANTI_ALIAS_FLAG).apply {
             textSize = size
             color = Color.WHITE
@@ -75,7 +79,7 @@ object TextImage {
         val h = layout.height.coerceIn(1, maxHeight)
         val bmp = Bitmap.createBitmap(width, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
-        c.drawColor(Color.BLACK)
+        c.drawColor(bg)
         layout.draw(c)
         val bos = ByteArrayOutputStream()
         bmp.compress(Bitmap.CompressFormat.PNG, 100, bos)
