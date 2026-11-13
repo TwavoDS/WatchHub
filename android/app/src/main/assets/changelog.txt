@@ -1,3 +1,12 @@
+## Telefoon 2.2.0 · Horloge 2.0.0
+- Nieuw op het horloge: Muziek. Toont wat er speelt op je telefoon, met hoes, en bedient afspelen, pauze, volgende, vorige en volume.
+- Nieuw: Acties. Eigen tegels op je horloge voor Home Assistant, IFTTT (webadres) of Tasker.
+- Nieuw: Herinneringen. Eigen herinneringen op een uur en dagen naar keuze, met trillen.
+- Navigatie werkt nu ook met OsmAnd, Komoot, Organic Maps, Waze en Sygic (eerste keer: stuur het logboek, dan stem ik het fijn af).
+- Het menu op het horloge scrolt, met Meldingen bovenaan.
+- De telefoon onthoudt welke horloge-versie je hebt.
+- Testlijst uitgebreid met muziek, acties, herinnering en batterijmelding.
+
 ## Telefoon 2.1.0 · Horloge 1.9.0
 - Contacten en groepen (Algemeen): per persoon of groep "Altijd tonen" (ook in stille uren en Niet storen), "Nooit tonen" of een eigen trilpatroon en kleur.
 - Groepsberichten per app uitzetten (bv. WhatsApp-groepen).

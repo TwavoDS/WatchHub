@@ -41,6 +41,17 @@ object Updater {
 
     private val main = Handler(Looper.getMainLooper())
 
+    /** The watch tells its version in "hello"/"page"; kept so it is known after a restart. */
+    fun rememberWatchVersion(ctx: Context, v: Int) {
+        if (v <= 0 || v == watchVersion) return
+        watchVersion = v
+        ctx.getSharedPreferences("watchhub_ui", Context.MODE_PRIVATE).edit().putInt("watchVersion", v).apply()
+    }
+
+    fun loadWatchVersion(ctx: Context) {
+        if (watchVersion == 0) watchVersion = ctx.getSharedPreferences("watchhub_ui", Context.MODE_PRIVATE).getInt("watchVersion", 0)
+    }
+
     fun phoneVersion(ctx: Context): Int = try {
         val pi = ctx.packageManager.getPackageInfo(ctx.packageName, 0)
         if (Build.VERSION.SDK_INT >= 28) pi.longVersionCode.toInt() else @Suppress("DEPRECATION") pi.versionCode

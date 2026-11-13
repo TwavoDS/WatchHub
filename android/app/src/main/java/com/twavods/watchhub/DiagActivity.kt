@@ -82,6 +82,17 @@ private fun tests(): List<TestItem> = listOf(
     TestItem("find", "Zoek telefoon", "Tik op het horloge op Zoek telefoon: de telefoon gaat luid af. Of test hier 3 seconden.", "Laat afgaan") { ctx ->
         FindPhone.start(ctx); android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ FindPhone.stop() }, 3000)
     },
+    TestItem("music", "Muziek", "Speel muziek af op je telefoon: titel, hoes en knoppen werken op het horloge.", "Open muziekscherm") {
+        WatchLink.gotoOnWatch(JSONObject().put("t", "goto").put("p", "music"), appWasClosed = true)
+    },
+    TestItem("actions", "Acties", "Je tegels staan op het horloge; een tik voert ze uit (maak er eerst een bij Muziek, acties en herinneringen).",
+        "Open acties") { WatchLink.gotoOnWatch(JSONObject().put("t", "goto").put("p", "actions"), appWasClosed = true) },
+    TestItem("reminder", "Herinnering", "Gele herinnering met trillen, blijft staan tot je ze wegtikt.", "Test nu") {
+        HubNotificationService.instance?.sendReminder("Dit is een testherinnering", "LL") ?: noService()
+    },
+    TestItem("battery", "Batterijmelding", "Gewone horlogemelding over je telefoonbatterij.", "Test nu") {
+        WatchLink.notify("🔋 Test", "Zo ziet de batterijmelding eruit"); HubLog.i("test", "batterijmelding verstuurd")
+    },
     TestItem("update", "Updates", "Zoekt naar een nieuwe versie zonder fout.", "Zoek updates") { ctx -> Updater.check(ctx) },
 )
 

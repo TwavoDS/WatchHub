@@ -171,7 +171,7 @@ function imgPart(m) {
   delete state.imgParts[m.k]
   let bytes
   try { bytes = b64ToBytes(p.parts.join('')) } catch (e) { log('E', 'afbeelding ' + m.k + ' kapot: ' + e.message); return }
-  const uri = 'internal://cache/t_' + m.k + '_' + Date.now() + '.png'
+  const uri = 'internal://cache/t_' + m.k + '_' + Date.now() + '.' + (m.f || 'png')
   file.writeArrayBuffer({
     uri: uri,
     buffer: bytes,
@@ -241,10 +241,10 @@ export function log(level, msg) {
 }
 
 // Keep equal to versionCode in manifest.json: the phone uses it to offer updates
-export const VERSION = 15
+export const VERSION = 16
 
 export function send(obj, onFail) {
-  if (obj && obj.cmd === 'hello') obj.v = VERSION
+  if (obj && (obj.cmd === 'hello' || obj.cmd === 'page')) obj.v = VERSION
   const conn = connect()
   conn.send({
     data: obj,

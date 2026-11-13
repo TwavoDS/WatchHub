@@ -1,0 +1,201 @@
+<template>
+  <div class="root">
+    <image if="{{art}}" class="art" src="{{art}}"></image>
+    <div class="shade"></div>
+    <div class="info">
+      <text class="app">{{app}}</text>
+      <text class="song">{{title}}</text>
+      <text class="artist">{{artist}}</text>
+    </div>
+    <div class="row">
+      <div class="btn" onclick="cmd('prev')"><image class="ico" src="/common/img/prev.png"></image></div>
+      <div class="play" onclick="cmd('toggle')">
+        <image class="ico-play" src="{{playing ? '/common/img/pause.png' : '/common/img/play.png'}}"></image>
+      </div>
+      <div class="btn" onclick="cmd('next')"><image class="ico" src="/common/img/next.png"></image></div>
+    </div>
+    <div class="vol">
+      <text class="vbtn" onclick="cmd('voldown')">-</text>
+      <text class="vtext">{{vol}}%</text>
+      <text class="vbtn" onclick="cmd('volup')">+</text>
+    </div>
+  </div>
+</template>
+
+<script>
+import * as link from '../../common/link.js'
+
+let unlisten = null
+let poll = null
+
+export default {
+  private: {
+    app: 'Muziek',
+    title: 'Niets aan het spelen',
+    artist: 'Start muziek op je telefoon',
+    playing: false,
+    vol: 0,
+    art: '',
+    artKey: ''
+  },
+
+  onShow() {
+    link.bind(this.$app)
+    unlisten = link.listen((m) => this.onMessage(m))
+    link.setPage('music')
+    link.send({ cmd: 'music' })
+    // The phone sends changes itself; this only catches a missed one
+    poll = setInterval(() => link.send({ cmd: 'music' }), 15000)
+  },
+
+  onHide() {
+    if (unlisten) { unlisten(); unlisten = null }
+    if (poll) { clearInterval(poll); poll = null }
+    link.setPage('')
+  },
+
+  onMessage(m) {
+    if (m.t === 'music') {
+      if (m.none) {
+        this.app = 'Muziek'; this.title = 'Niets aan het spelen'; this.artist = 'Start muziek op je telefoon'
+        this.playing = false; this.art = ''; this.artKey = ''
+        return
+      }
+      this.app = m.app || 'Muziek'
+      this.title = m.title || '—'
+      this.artist = m.artist || ''
+      this.playing = !!m.playing
+      this.vol = m.vol || 0
+      this.artKey = m.art || ''
+      this.showArt()
+    } else if (m.t === 'imgReady' || m.t === 'imgRetry') {
+      this.showArt()
+    }
+  },
+
+  showArt() {
+    const img = link.imageFor(this.artKey)
+    this.art = img ? img.uri : ''
+  },
+
+  cmd(a) {
+    if (a === 'toggle') this.playing = !this.playing
+    link.send({ cmd: 'media', a: a })
+  }
+}
+</script>
+
+<style>
+.root {
+  width: 480px;
+  height: 480px;
+  background-color: #000000;
+  flex-direction: column;
+  align-items: center;
+}
+.art {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 480px;
+  height: 480px;
+}
+.shade {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 480px;
+  height: 480px;
+  background-color: rgba(0, 0, 0, 0.55);
+}
+.info {
+  position: absolute;
+  left: 60px;
+  top: 70px;
+  width: 360px;
+  height: 160px;
+  flex-direction: column;
+  align-items: center;
+}
+.app {
+  height: 28px;
+  font-size: 20px;
+  color: #bbbbbb;
+}
+.song {
+  width: 360px;
+  height: 80px;
+  font-size: 30px;
+  font-weight: bold;
+  color: #ffffff;
+  text-align: center;
+  lines: 2;
+  text-overflow: ellipsis;
+}
+.artist {
+  width: 340px;
+  height: 34px;
+  font-size: 24px;
+  color: #dddddd;
+  text-align: center;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+.row {
+  position: absolute;
+  left: 60px;
+  top: 240px;
+  width: 360px;
+  height: 110px;
+  flex-direction: row;
+  justify-content: space-around;
+  align-items: center;
+}
+.btn {
+  width: 84px;
+  height: 84px;
+  border-radius: 42px;
+  background-color: rgba(255, 255, 255, 0.15);
+  justify-content: center;
+  align-items: center;
+}
+.ico {
+  width: 44px;
+  height: 44px;
+}
+.ico-play {
+  width: 56px;
+  height: 56px;
+}
+.play {
+  width: 110px;
+  height: 110px;
+  border-radius: 55px;
+  background-color: #ffffff;
+  justify-content: center;
+  align-items: center;
+}
+.vol {
+  position: absolute;
+  left: 110px;
+  top: 366px;
+  width: 260px;
+  height: 64px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+.vbtn {
+  width: 64px;
+  height: 64px;
+  border-radius: 32px;
+  background-color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  font-size: 36px;
+  text-align: center;
+}
+.vtext {
+  font-size: 24px;
+  color: #ffffff;
+}
+</style>

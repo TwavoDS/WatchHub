@@ -235,6 +235,11 @@ private fun HomeScreen() {
                 }
             }
 
+            HubCard("Muziek, acties en herinneringen", Icons.Filled.PlayArrow, HubGreen) {
+                Hint("Muziek bedienen, tegels voor Home Assistant/Tasker en eigen herinneringen op je horloge.")
+                FilledTonalButton(onClick = { ctx.startActivity(Intent(ctx, ToolsActivity::class.java)) }) { Text("Openen") }
+            }
+
             UpdateCard()
 
             HubCard("Testen en logboek", Icons.Filled.Build, if (HubLog.errorCount() > 0) HubOrange else HubBlue) {

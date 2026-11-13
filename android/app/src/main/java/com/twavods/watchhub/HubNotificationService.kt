@@ -82,6 +82,7 @@ class HubNotificationService : NotificationListenerService() {
     override fun onListenerConnected() {
         connected = true
         PhoneWatch.start(this)
+        Reminders.scheduleAll(this)
         instance = this
         nav = NavHandler(this)
         WatchLink.init(this)
@@ -92,10 +93,19 @@ class HubNotificationService : NotificationListenerService() {
         WatchLink.handlers["reply"] = { m -> reply(m.optInt("id"), m.optString("text")) }
         WatchLink.handlers["icon"] = { m -> sendIcon(m.optString("pkg")) }
         WatchLink.handlers["img"] = { m -> sendImage(m.optString("k")) }
-        WatchLink.handlers["page"] = { m -> watchPage = m.optString("p") }
+        WatchLink.handlers["page"] = { m ->
+            watchPage = m.optString("p")
+            if (m.optInt("v") > 0) Updater.rememberWatchVersion(this, m.optInt("v"))
+            if (watchPage == "music") MediaControl.sendState()
+        }
+        MediaControl.start(this)
+        WatchLink.handlers["media"] = { m -> MediaControl.command(m.optString("a")) }
+        WatchLink.handlers["music"] = { MediaControl.sendState() }
+        WatchLink.handlers["actions"] = { Actions.sendList(this) }
+        WatchLink.handlers["act"] = { m -> Actions.run(this, m.optString("id")) }
         WatchLink.handlers["findphone"] = { m -> if (m.optBoolean("on")) FindPhone.start(this) else FindPhone.stop() }
         try {
-            activeNotifications?.forEach { if (it.packageName == NavHandler.MAPS) nav.onPosted(it) }
+            activeNotifications?.forEach { if (it.packageName in NavHandler.NAV_APPS) nav.onPosted(it) }
         } catch (_: Exception) {}
     }
 
@@ -290,6 +300,9 @@ class HubNotificationService : NotificationListenerService() {
 
     private val imgSentAt = HashMap<String, Long>()
 
+    /** Lets other parts (music) offer a picture the watch can ask for with {"cmd":"img"}. */
+    fun offerImage(key: String, make: () -> TextImage.Result) { imgSources[key] = make }
+
     private fun sendImage(key: String) {
         // The watch may ask while the phone is already pushing it: send each picture only once per few seconds
         val now = android.os.SystemClock.elapsedRealtime()
@@ -304,7 +317,7 @@ class HubNotificationService : NotificationListenerService() {
         for (c in 0 until n) {
             // A little apart, so the watch isn't flooded
             val msg = JSONObject().put("t", "img").put("k", key).put("c", c).put("n", n)
-                    .put("h", img.height).put("w", img.width)
+                    .put("h", img.height).put("w", img.width).put("f", img.format)
                     .put("d", d.substring(c * size, minOf(d.length, (c + 1) * size)))
             main.postDelayed({ WatchLink.post(msg) }, c * 200L)
         }
@@ -442,6 +455,17 @@ class HubNotificationService : NotificationListenerService() {
             .put("actions", JSONArray())
             .put("replies", if (rule.replies) JSONArray(NotifRules.replies(this)) else JSONArray())
         remember(Item(id, "test:$id", json, rule, emptyList(), null))
+        deliver(json, rule, quiet = false, reminder = false)
+    }
+
+    /** Own reminder (Herinneringen): WatchHub screen, stays until tapped away. */
+    fun sendReminder(text: String, vib: String) {
+        val id = nextNumber()
+        val json = baseJson(id, packageName, "⏰ Herinnering", text, "#FFCA28", vib, System.currentTimeMillis())
+            .put("quiet", false).put("dur", 0).put("call", false)
+            .put("actions", JSONArray()).put("replies", JSONArray())
+        val rule = AppRule(enabled = true, vib = vib, color = "#FFCA28", duration = 0, display = "screen", replies = false)
+        remember(Item(id, "reminder:$id", json, rule, emptyList(), null))
         deliver(json, rule, quiet = false, reminder = false)
     }
 

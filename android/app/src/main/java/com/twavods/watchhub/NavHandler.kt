@@ -29,6 +29,9 @@ class NavHandler(private val ctx: Context) {
 
     companion object {
         const val MAPS = "com.google.android.apps.maps"
+        /** Navigation apps whose turn-by-turn notification is shown on the watch. */
+        val NAV_APPS = setOf(MAPS, "net.osmand", "net.osmand.plus", "net.osmand.dev", "de.komoot.android",
+            "com.waze", "com.sygic.aura", "app.organicmaps", "app.comaps", "com.mapswithme.maps.pro")
         private const val ICON_SIZE = 120
 
         @Volatile var lastNav: NavState? = null; private set
@@ -53,10 +56,11 @@ class NavHandler(private val ctx: Context) {
 
     /** Returns true when this was the Google Maps navigation notification. */
     fun onPosted(sbn: StatusBarNotification): Boolean {
-        if (sbn.packageName != MAPS) return false
+        if (sbn.packageName !in NAV_APPS) return false
         val n = sbn.notification ?: return false
-        if (!isNavigation(n)) return false
         val e = n.extras ?: Bundle()
+        if (!isNavigation(n, sbn.packageName, e)) return false
+        logFormat(sbn.packageName, n, e)
 
         val title = e.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim().orEmpty()
         val text = (e.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: e.getCharSequence(Notification.EXTRA_TEXT))
@@ -106,9 +110,9 @@ class NavHandler(private val ctx: Context) {
 
     /** Returns true when this was the Google Maps navigation notification. */
     fun onRemoved(sbn: StatusBarNotification): Boolean {
-        if (sbn.packageName != MAPS) return false
+        if (sbn.packageName !in NAV_APPS) return false
         val n = sbn.notification ?: return false
-        if (!isNavigation(n)) return false
+        if (!isNavigation(n, sbn.packageName, n.extras ?: Bundle())) return false
         if (!navigating) return true
         navigating = false
         lastNav = null
@@ -132,11 +136,25 @@ class NavHandler(private val ctx: Context) {
         else WatchLink.post(toJson(s, withIcon = true))
     }
 
-    private fun isNavigation(n: Notification): Boolean {
+    private fun isNavigation(n: Notification, pkg: String, e: Bundle): Boolean {
         if (n.category == Notification.CATEGORY_NAVIGATION) return true
         val ongoing = n.flags and Notification.FLAG_ONGOING_EVENT != 0
         val channel = n.channelId?.lowercase().orEmpty()
-        return ongoing && (channel.contains("navigation") || channel.contains("nav"))
+        if (ongoing && (channel.contains("navigation") || channel.contains("nav"))) return true
+        if (pkg == MAPS || !ongoing) return false
+        // Other apps (OsmAnd, Komoot, …): an ongoing notification that starts with a distance
+        val title = e.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        val text = e.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
+        return looksLikeDistance(title) || looksLikeDistance(text)
+    }
+
+    private val formatLogged = HashSet<String>()
+
+    /** Writes once per app how its navigation notification looks, to tune the reading of it. */
+    private fun logFormat(pkg: String, n: Notification, e: Bundle) {
+        if (!formatLogged.add(pkg)) return
+        HubLog.i("navigatie", "$pkg: kanaal=${n.channelId} cat=${n.category} titel=\"${e.getCharSequence(Notification.EXTRA_TITLE)}\" " +
+            "tekst=\"${e.getCharSequence(Notification.EXTRA_TEXT)}\" sub=\"${e.getCharSequence(Notification.EXTRA_SUB_TEXT)}\"")
     }
 
     private fun toJson(s: NavState, withIcon: Boolean): JSONObject {

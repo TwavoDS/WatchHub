@@ -1,0 +1,110 @@
+<template>
+  <list class="root">
+    <list-item type="head" class="li-head">
+      <text class="title">Acties</text>
+      <text class="status">{{status}}</text>
+    </list-item>
+    <list-item for="{{items}}" type="item" class="li-item">
+      <text class="tile" style="border-color: {{$item.color}};" onclick="run($item.id)">{{$item.label}}</text>
+    </list-item>
+    <list-item type="foot" class="li-foot"><text class="status"></text></list-item>
+  </list>
+</template>
+
+<script>
+import * as link from '../../common/link.js'
+
+let unlisten = null
+
+export default {
+  private: {
+    items: [],
+    status: 'Laden…'
+  },
+
+  onShow() {
+    link.bind(this.$app)
+    unlisten = link.listen((m) => this.onMessage(m))
+    link.setPage('actions')
+    link.send({ cmd: 'actions' }, () => { this.status = 'Geen verbinding met telefoon' })
+  },
+
+  onHide() {
+    if (unlisten) { unlisten(); unlisten = null }
+    link.setPage('')
+  },
+
+  onMessage(m) {
+    if (m.t === 'actions') {
+      this.items = (m.items || []).map((a) => ({ id: a.id, name: a.name, label: a.name, color: a.color || '#4FC3F7' }))
+      this.status = this.items.length ? '' : 'Maak acties in de WatchHub-app op je telefoon'
+    } else if (m.t === 'actres') {
+      this.items = this.items.map((a) => a.id === m.id
+        ? Object.assign({}, a, { label: (m.ok ? 'Gelukt' : 'Mislukt') }) : a)
+      link.vibrate(m.ok ? 'S' : 'LL')
+      if (!m.ok) this.status = m.msg || 'Mislukt'
+      setTimeout(() => {
+        this.items = this.items.map((a) => a.id === m.id ? Object.assign({}, a, { label: a.name }) : a)
+      }, 2500)
+    }
+  },
+
+  run(id) {
+    this.status = ''
+    this.items = this.items.map((a) => a.id === id ? Object.assign({}, a, { label: 'Bezig...' }) : a)
+    link.send({ cmd: 'act', id: id }, () => { this.status = 'Niet verstuurd: geen verbinding' })
+  }
+}
+</script>
+
+<style>
+.root {
+  width: 480px;
+  height: 480px;
+  background-color: #000000;
+}
+.li-head {
+  width: 480px;
+  height: 120px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+.title {
+  height: 44px;
+  font-size: 34px;
+  font-weight: bold;
+  color: #ffca28;
+}
+.status {
+  width: 340px;
+  height: 30px;
+  font-size: 20px;
+  color: #888888;
+  text-align: center;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+.li-item {
+  width: 480px;
+  height: 88px;
+  justify-content: center;
+  align-items: center;
+}
+.tile {
+  width: 320px;
+  height: 74px;
+  border-radius: 37px;
+  border-width: 3px;
+  background-color: #1e1e1e;
+  color: #ffffff;
+  font-size: 28px;
+  text-align: center;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+.li-foot {
+  width: 480px;
+  height: 120px;
+}
+</style>

@@ -1,23 +1,22 @@
 <template>
-  <div class="root">
-    <text class="title">WatchHub</text>
-    <text class="status">{{status}}</text>
-
-    <div class="item" onclick="goCamera">
-      <div class="dot dot-cam"></div>
-      <text class="label">Camera</text>
-    </div>
-    <div class="item" onclick="goNav">
-      <div class="dot dot-nav"></div>
-      <text class="label">Navigatie</text>
-    </div>
-    <div class="item" onclick="goNotif">
-      <div class="dot dot-notif"></div>
-      <text class="label">Meldingen</text>
-      <text if="{{count > 0}}" class="badge">{{count}}</text>
-    </div>
-    <text class="find {{ringing ? 'find-on' : ''}}" onclick="toggleFind">{{ringing ? 'Stop zoeken' : 'Zoek telefoon'}}</text>
-  </div>
+  <!-- A list, so the menu scrolls (finger or crown) now that there are more items -->
+  <list class="root">
+    <list-item type="head" class="li-head">
+      <text class="title">WatchHub</text>
+      <text class="status">{{status}}</text>
+    </list-item>
+    <list-item for="{{menu}}" type="item" class="li-item">
+      <div class="item" onclick="go($item.page)">
+        <div class="dot" style="background-color: {{$item.color}};"></div>
+        <text class="label">{{$item.label}}</text>
+        <text if="{{$item.page === 'notif' && count > 0}}" class="badge">{{count}}</text>
+      </div>
+    </list-item>
+    <list-item type="find" class="li-find">
+      <text class="find {{ringing ? 'find-on' : ''}}" onclick="toggleFind">{{ringing ? 'Stop zoeken' : 'Zoek telefoon'}}</text>
+    </list-item>
+    <list-item type="foot" class="li-foot"><text class="status"></text></list-item>
+  </list>
 </template>
 
 <script>
@@ -28,6 +27,13 @@ let unlisten = null
 
 export default {
   private: {
+    menu: [
+      { page: 'notif', label: 'Meldingen', color: '#66bb6a' },
+      { page: 'nav', label: 'Navigatie', color: '#1976d2' },
+      { page: 'music', label: 'Muziek', color: '#ab47bc' },
+      { page: 'camera', label: 'Camera', color: '#ff6b00' },
+      { page: 'actions', label: 'Acties', color: '#ffca28' }
+    ],
     status: 'Verbinden…',
     count: 0,
     ringing: false
@@ -60,9 +66,7 @@ export default {
     link.findPhone(this.ringing)
   },
 
-  goCamera() { router.push({ uri: '/pages/camera' }) },
-  goNav() { router.push({ uri: '/pages/nav' }) },
-  goNotif() { router.push({ uri: '/pages/notif' }) }
+  go(page) { router.push({ uri: '/pages/' + page }) }
 }
 </script>
 
@@ -71,16 +75,38 @@ export default {
   width: 480px;
   height: 480px;
   background-color: #000000;
+}
+.li-head {
+  width: 480px;
+  height: 120px;
   flex-direction: column;
   align-items: center;
-  padding-top: 36px;
+  justify-content: flex-end;
+}
+.li-item {
+  width: 480px;
+  height: 84px;
+  justify-content: center;
+  align-items: center;
+}
+.li-find {
+  width: 480px;
+  height: 80px;
+  justify-content: center;
+  align-items: center;
+}
+.li-foot {
+  width: 480px;
+  height: 100px;
 }
 .title {
+  height: 44px;
   font-size: 34px;
   font-weight: bold;
   color: #4fc3f7;
 }
 .status {
+  height: 30px;
   font-size: 20px;
   color: #888888;
   margin-bottom: 6px;
@@ -88,7 +114,6 @@ export default {
 .item {
   width: 320px;
   height: 74px;
-  margin-top: 8px;
   border-radius: 44px;
   background-color: #1e1e1e;
   flex-direction: row;
@@ -113,7 +138,6 @@ export default {
 .find {
   width: 230px;
   height: 56px;
-  margin-top: 10px;
   border-radius: 28px;
   background-color: #3a3000;
   color: #ffca28;

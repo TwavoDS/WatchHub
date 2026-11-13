@@ -100,10 +100,14 @@ object WatchLink {
     private const val CHUNK = 8000
     private const val WINDOW = 2
 
+    private lateinit var app: Context
+
     fun init(context: Context) {
         if (initialized) return
         initialized = true
         val app = context.applicationContext
+        this.app = app
+        Updater.loadWatchVersion(app)
         nodeApi = Wearable.getNodeApi(app)
         messageApi = Wearable.getMessageApi(app)
         authApi = Wearable.getAuthApi(app)
@@ -276,7 +280,7 @@ object WatchLink {
             "switch" -> source?.switchCamera()
             else -> {
                 if (msg.optString("cmd") == "hello") {
-                    if (msg.optInt("v") > 0) Updater.watchVersion = msg.optInt("v")
+                    if (msg.optInt("v") > 0) Updater.rememberWatchVersion(app, msg.optInt("v"))
                     flushPendingGoto()
                 }
                 if (msg.optString("cmd") == "page") {

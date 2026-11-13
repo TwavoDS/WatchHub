@@ -21,7 +21,16 @@ import java.io.ByteArrayOutputStream
  */
 object TextImage {
 
-    class Result(val base64: String, val width: Int, val height: Int)
+    class Result(val base64: String, val width: Int, val height: Int, val format: String = "png")
+
+    /** A picture (e.g. album art) as a small JPEG for the watch. */
+    fun picture(bmp: android.graphics.Bitmap, size: Int = 180): Result {
+        val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, size, size, true)
+        val bos = ByteArrayOutputStream()
+        scaled.compress(Bitmap.CompressFormat.JPEG, 75, bos)
+        if (scaled !== bmp) scaled.recycle()
+        return Result(Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP), size, size, "jpg")
+    }
 
     /** True when the text contains characters the watch font probably can't draw. */
     fun needsImage(s: String): Boolean {
