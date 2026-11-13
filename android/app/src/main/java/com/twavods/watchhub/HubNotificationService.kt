@@ -92,6 +92,7 @@ class HubNotificationService : NotificationListenerService() {
         WatchLink.handlers["action"] = { m -> runAction(m.optInt("id"), m.optInt("i")) }
         WatchLink.handlers["reply"] = { m -> reply(m.optInt("id"), m.optString("text")) }
         WatchLink.handlers["icon"] = { m -> sendIcon(m.optString("pkg")) }
+        WatchLink.handlers["got"] = { m -> awaitingGot.remove(m.optInt("id")) }
         WatchLink.handlers["img"] = { m -> sendImage(m.optString("k")) }
         WatchLink.handlers["page"] = { m ->
             watchPage = m.optString("p")
@@ -299,6 +300,7 @@ class HubNotificationService : NotificationListenerService() {
     }
 
     private val imgSentAt = HashMap<String, Long>()
+    private val awaitingGot = HashSet<Int>()
 
     /** Lets other parts (music) offer a picture the watch can ask for with {"cmd":"img"}. */
     fun offerImage(key: String, make: () -> TextImage.Result) { imgSources[key] = make }
@@ -349,8 +351,20 @@ class HubNotificationService : NotificationListenerService() {
             WatchLink.gotoOnWatch(goto, appWasClosed = watchPage.isEmpty())
             pushImages(json, if (watchPage.isEmpty()) 4000L else 300L)
         } else {
+            // The phone thinks the app is open; if the watch doesn't confirm (app was closed
+            // without telling, e.g. by the system), open it with the notification after all
             WatchLink.post(json)
             pushImages(json, 300L)
+            val id = json.optInt("id")
+            awaitingGot.add(id)
+            main.postDelayed({
+                if (awaitingGot.remove(id)) {
+                    HubLog.w("melding", "horloge bevestigde niet (pagina '$watchPage'), app opnieuw geopend")
+                    watchPage = ""
+                    WatchLink.gotoOnWatch(JSONObject().put("t", "goto").put("p", "notif").put("n", json), appWasClosed = true)
+                    pushImages(json, 4000L)
+                }
+            }, 3500)
         }
     }
 

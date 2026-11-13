@@ -1,3 +1,6 @@
+## Telefoon 2.2.1 · Horloge 2.0.1
+- Meldingen komen ook door als het horloge WatchHub stilletjes had afgesloten: het horloge bevestigt elke melding, en zonder bevestiging opent de telefoon WatchHub opnieuw met de melding. (Gevonden in je logboek bij het WhatsApp-bericht van 20:02.)
+
 ## Telefoon 2.2.0 · Horloge 2.0.0
 - Nieuw op het horloge: Muziek. Toont wat er speelt op je telefoon, met hoes, en bedient afspelen, pauze, volgende, vorige en volume.
 - Nieuw: Acties. Eigen tegels op je horloge voor Home Assistant, IFTTT (webadres) of Tasker.

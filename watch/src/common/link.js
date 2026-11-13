@@ -88,6 +88,7 @@ function onMessage(raw) {
   }
   switch (msg.t) {
     case 'notif':
+      send({ cmd: 'got', id: msg.id })   // tells the phone the app is really open
       state.notifs = [msg].concat(state.notifs.filter((n) => n.id !== msg.id)).slice(0, 20)
       if (!msg.quiet && msg.vib) vibrate(msg.vib)
       requestIcon(msg.pkg)
@@ -114,6 +115,7 @@ function onMessage(raw) {
       // itself travels inside this message, so the screen never shows an older one first.
       const n = msg.n
       if (n) {
+        send({ cmd: 'got', id: n.id })
         state.notifs = [n].concat(state.notifs.filter((x) => x.id !== n.id)).slice(0, 20)
         if (!n.quiet && n.vib) vibrate(n.vib)
         requestIcon(n.pkg)
@@ -241,7 +243,7 @@ export function log(level, msg) {
 }
 
 // Keep equal to versionCode in manifest.json: the phone uses it to offer updates
-export const VERSION = 16
+export const VERSION = 17
 
 export function send(obj, onFail) {
   if (obj && (obj.cmd === 'hello' || obj.cmd === 'page')) obj.v = VERSION
