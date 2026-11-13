@@ -190,7 +190,7 @@ export function imageFor(k) {
   const now = Date.now()
   if (!state.imgAsked[k] || now - state.imgAsked[k] > 8000) {
     state.imgAsked[k] = now
-    send({ cmd: 'img', k: k })
+    send({ cmd: 'img', k: k }, () => { state.imgAsked[k] = 0 })
   }
   return null
 }
@@ -203,6 +203,9 @@ export function connect() {
     state.open = true
     send({ cmd: 'hello' })
     if (state.page) send({ cmd: 'page', p: state.page })
+    // Ask again for pictures that didn't arrive while the link was down
+    state.imgAsked = {}
+    emit({ t: 'imgRetry' })
     emit({ t: 'linkOpen' })
   }
   conn.onclose = (d) => { state.open = false; emit({ t: 'linkClosed', code: d && d.code }) }

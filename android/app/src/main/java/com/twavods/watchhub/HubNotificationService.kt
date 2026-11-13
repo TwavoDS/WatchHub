@@ -254,9 +254,18 @@ class HubNotificationService : NotificationListenerService() {
         json.put("rimg", keys)
     }
 
+    /** Sends the pictures of this notification without waiting for the watch to ask. */
+    private fun pushImages(json: JSONObject, delayMs: Long) {
+        val keys = mutableListOf<String>()
+        json.optString("img").let { if (it.isNotEmpty()) keys.add(it) }
+        json.optJSONArray("rimg")?.let { a -> for (i in 0 until a.length()) a.optString(i).let { if (it.isNotEmpty()) keys.add(it) } }
+        keys.forEachIndexed { i, k -> main.postDelayed({ sendImage(k) }, delayMs + i * 900L) }
+    }
+
     private fun sendImage(key: String) {
-        val make = imgSources[key] ?: return
-        val img = try { make() } catch (_: Exception) { return }
+        val make = imgSources[key] ?: run { lastInfo = "afbeelding onbekend: $key"; return }
+        val img = try { make() } catch (e: Exception) { lastInfo = "afbeelding mislukt: ${e.message}"; return }
+        lastInfo = "emoji-afbeelding verstuurd (${img.base64.length / 1024} kB)"
         val d = img.base64
         val size = 7000
         val n = (d.length + size - 1) / size
@@ -293,8 +302,10 @@ class HubNotificationService : NotificationListenerService() {
             // The notification travels inside the "goto", so the screen never shows an older one first
             val goto = JSONObject().put("t", "goto").put("p", "notif").put("n", json)
             WatchLink.gotoOnWatch(goto, appWasClosed = watchPage.isEmpty())
+            pushImages(json, if (watchPage.isEmpty()) 4000L else 300L)
         } else {
             WatchLink.post(json)
+            pushImages(json, 300L)
         }
     }
 

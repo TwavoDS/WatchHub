@@ -70,6 +70,7 @@ import router from '@system.router'
 
 let unlisten = null
 let closeTimer = null
+let imgTimer = null
 let autoClose = false
 
 function actClass(title) {
@@ -107,11 +108,27 @@ export default {
     const id = link.takeOpenId()
     if (id !== null) this.openById(id)
     link.sync()
+    // Pictures of emoji text can arrive a little later: look again until they're here
+    let tries = 0
+    if (imgTimer) clearInterval(imgTimer)
+    imgTimer = setInterval(() => {
+      tries++
+      if (this.open && this.waitingForImages()) this.refresh()
+      if (tries > 30) { clearInterval(imgTimer); imgTimer = null }
+    }, 2000)
+  },
+
+  waitingForImages() {
+    const n = link.notifs().find((x) => x.id === this.cur.id)
+    if (!n) return false
+    if (n.img && !this.cur.bodyImg) return true
+    return (n.rimg || []).some((k, i) => k && this.cur.replies[i] && !this.cur.replies[i].img)
   },
 
   onHide() {
     if (unlisten) { unlisten(); unlisten = null }
     this.stopTimer()
+    if (imgTimer) { clearInterval(imgTimer); imgTimer = null }
     link.setPage('')
     try { brightness.setKeepScreenOn({ keepScreenOn: false }) } catch (e) {}
   },
@@ -156,7 +173,7 @@ export default {
       link.takeOpenId()
       this.refresh()
       this.openById(m.id)
-    } else if (m.t === 'list' || m.t === 'gone' || m.t === 'iconReady' || m.t === 'imgReady') {
+    } else if (m.t === 'list' || m.t === 'gone' || m.t === 'iconReady' || m.t === 'imgReady' || m.t === 'imgRetry') {
       this.refresh()
     } else if (m.t === 'linkError' || m.t === 'linkClosed') {
       if (this.items.length === 0) this.status = 'Geen verbinding met telefoon'
