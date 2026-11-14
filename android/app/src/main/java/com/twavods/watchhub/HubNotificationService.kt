@@ -103,6 +103,8 @@ class HubNotificationService : NotificationListenerService() {
         WatchLink.handlers["media"] = { m -> MediaControl.command(m.optString("a")) }
         WatchLink.handlers["music"] = { MediaControl.sendState() }
         WatchLink.handlers["actions"] = { Actions.sendList(this) }
+        WatchLink.handlers["ha"] = { HomeAssistant.sendStates(this) }
+        WatchLink.handlers["hatog"] = { m -> HomeAssistant.tap(this, m.optString("id")) }
         WatchLink.handlers["act"] = { m -> Actions.run(this, m.optString("id")) }
         WatchLink.handlers["findphone"] = { m -> if (m.optBoolean("on")) FindPhone.start(this) else FindPhone.stop() }
         try {
@@ -182,6 +184,7 @@ class HubNotificationService : NotificationListenerService() {
             .put("dur", rule.duration)
             .put("call", false)
         putActions(json, actions, replyAction, rule)
+        addPicture(json, n, id)
 
         remember(Item(id, sbn.key, json, rule, actions, replyAction))
         forwarded++
@@ -295,12 +298,59 @@ class HubNotificationService : NotificationListenerService() {
     private fun pushImages(json: JSONObject, delayMs: Long) {
         val keys = mutableListOf<String>()
         json.optString("img").let { if (it.isNotEmpty()) keys.add(it) }
+        json.optString("pic").let { if (it.isNotEmpty()) keys.add(it) }
         json.optJSONArray("rimg")?.let { a -> for (i in 0 until a.length()) a.optString(i).let { if (it.isNotEmpty()) keys.add(it) } }
         keys.forEachIndexed { i, k -> main.postDelayed({ sendImage(k) }, delayMs + i * 900L) }
     }
 
     private val imgSentAt = HashMap<String, Long>()
     private val awaitingGot = HashSet<Int>()
+
+    private var pictureErrorLogged = false
+
+    /** A photo in the notification (sent photo in WhatsApp, picture in a news alert, …). */
+    private fun addPicture(json: JSONObject, n: Notification, id: Int) {
+        val bmp = try { pictureOf(n) } catch (e: Exception) {
+            if (!pictureErrorLogged) { pictureErrorLogged = true; HubLog.w("melding", "foto niet leesbaar: ${e.message}") }
+            null
+        } ?: return
+        if (bmp.width < 60 || bmp.height < 60) return
+        val h = (bmp.height.toFloat() * 320 / bmp.width).toInt().coerceIn(40, 420)
+        val key = "p${id}_${bmp.generationId}"
+        val copy = bmp.copy(android.graphics.Bitmap.Config.ARGB_8888, false) ?: return
+        imgSources[key] = { TextImage.photo(copy) }
+        json.put("pic", key).put("picH", h)
+        HubLog.i("melding", "foto meegestuurd (${bmp.width}×${bmp.height})")
+    }
+
+    @Suppress("DEPRECATION")
+    private fun pictureOf(n: Notification): android.graphics.Bitmap? {
+        val ex = n.extras ?: return null
+        // 1. Big picture style
+        (ex.get(Notification.EXTRA_PICTURE) as? android.graphics.Bitmap)?.let { return it }
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            (ex.get(Notification.EXTRA_PICTURE_ICON) as? android.graphics.drawable.Icon)?.let { icon ->
+                icon.loadDrawable(this)?.let { return drawableToBitmap(it) }
+            }
+        }
+        // 2. Chat apps: the newest message with a picture
+        val msgs = ex.getParcelableArray(Notification.EXTRA_MESSAGES) ?: return null
+        val list = Notification.MessagingStyle.Message.getMessagesFromBundleArray(msgs)
+        val withPic = list.lastOrNull { it.dataMimeType?.startsWith("image/") == true && it.dataUri != null } ?: return null
+        contentResolver.openInputStream(withPic.dataUri!!)?.use { input ->
+            val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }
+            return android.graphics.BitmapFactory.decodeStream(input, null, opts)
+        }
+        return null
+    }
+
+    private fun drawableToBitmap(d: android.graphics.drawable.Drawable): android.graphics.Bitmap {
+        if (d is android.graphics.drawable.BitmapDrawable && d.bitmap != null) return d.bitmap
+        val w = d.intrinsicWidth.coerceIn(1, 1200); val h = d.intrinsicHeight.coerceIn(1, 1200)
+        val b = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(b); d.setBounds(0, 0, w, h); d.draw(c)
+        return b
+    }
 
     /** Lets other parts (music) offer a picture the watch can ask for with {"cmd":"img"}. */
     fun offerImage(key: String, make: () -> TextImage.Result) { imgSources[key] = make }

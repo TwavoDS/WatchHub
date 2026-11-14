@@ -27,7 +27,18 @@ import android.widget.SeekBar
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import android.annotation.SuppressLint
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.camera.video.FallbackStrategy
+import androidx.camera.video.MediaStoreOutputOptions
+import androidx.camera.video.Quality
+import androidx.camera.video.QualitySelector
+import androidx.camera.video.Recorder
+import androidx.camera.video.Recording
+import androidx.camera.video.VideoCapture
+import androidx.camera.video.VideoRecordEvent
+import org.json.JSONObject
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -69,6 +80,18 @@ class CameraActivity : ComponentActivity(), WatchLink.Source {
     private var analysisUseCase: ImageAnalysis? = null
     private var lastRotation = -1
 
+    // Extra controls from the watch
+    private var camera: Camera? = null
+    private var videoMode = false
+    private var flashMode = ImageCapture.FLASH_MODE_OFF
+    private var zoom = 1f
+    private var videoCapture: VideoCapture<Recorder>? = null
+    private var recording: Recording? = null
+    private var recStartedAt = 0L
+
+    private val audioPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     private val cameraPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (granted) startCamera() else WatchLink.lastError = "Camera-toestemming is nodig."
@@ -99,6 +122,8 @@ class CameraActivity : ComponentActivity(), WatchLink.Source {
         orientation = DeviceOrientation(this)
         setContentView(buildUi())
         sound.load(MediaActionSound.SHUTTER_CLICK)
+        sound.load(MediaActionSound.START_VIDEO_RECORDING)
+        sound.load(MediaActionSound.STOP_VIDEO_RECORDING)
 
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
@@ -131,6 +156,7 @@ class CameraActivity : ComponentActivity(), WatchLink.Source {
     }
 
     override fun onDestroy() {
+        stopRecording()
         if (WatchLink.source === this) WatchLink.source = null
         analysisExecutor.shutdown()
         sound.release()
@@ -261,7 +287,13 @@ class CameraActivity : ComponentActivity(), WatchLink.Source {
         }
         val capture = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .setFlashMode(flashMode)
             .build()
+        val video = VideoCapture.withOutput(
+            Recorder.Builder()
+                .setQualitySelector(QualitySelector.from(Quality.FHD, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)))
+                .build()
+        )
         val analysis = ImageAnalysis.Builder()
             .setResolutionSelector(
                 ResolutionSelector.Builder()
@@ -280,8 +312,13 @@ class CameraActivity : ComponentActivity(), WatchLink.Source {
         val selector = CameraSelector.Builder().requireLensFacing(lensFacing).build()
         try {
             provider.unbindAll()
-            provider.bindToLifecycle(this, selector, preview, capture, analysis)
-            imageCapture = capture
+            // Most phones can't do photo + video + live picture at once: photo OR video
+            camera = if (videoMode) provider.bindToLifecycle(this, selector, preview, video, analysis)
+                     else provider.bindToLifecycle(this, selector, preview, capture, analysis)
+            imageCapture = if (videoMode) null else capture
+            videoCapture = if (videoMode) video else null
+            camera?.cameraControl?.setZoomRatio(zoom)
+            if (videoMode) camera?.cameraControl?.enableTorch(flashMode == ImageCapture.FLASH_MODE_ON)
             analysisUseCase = analysis
             lastRotation = -1
             WatchLink.kick()
@@ -338,6 +375,80 @@ class CameraActivity : ComponentActivity(), WatchLink.Source {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) = done(null)
                 override fun onError(exc: ImageCaptureException) = done(exc.message ?: "fout")
             })
+    }
+
+    /** Flash, zoom, photo/video and recording, asked from the watch. Returns the new state. */
+    override fun camCmd(a: String): JSONObject {
+        when (a) {
+            "flash" -> {
+                flashMode = when (flashMode) {
+                    ImageCapture.FLASH_MODE_OFF -> ImageCapture.FLASH_MODE_ON
+                    ImageCapture.FLASH_MODE_ON -> if (videoMode) ImageCapture.FLASH_MODE_OFF else ImageCapture.FLASH_MODE_AUTO
+                    else -> ImageCapture.FLASH_MODE_OFF
+                }
+                imageCapture?.flashMode = flashMode
+                if (videoMode) camera?.cameraControl?.enableTorch(flashMode == ImageCapture.FLASH_MODE_ON)
+            }
+            "zoom" -> {
+                val max = camera?.cameraInfo?.zoomState?.value?.maxZoomRatio ?: 1f
+                val steps = listOf(1f, 2f, 3f, 5f, 10f).filter { it <= max + 0.01f }
+                val i = steps.indexOfFirst { it > zoom + 0.01f }
+                zoom = if (i < 0) 1f else steps[i]
+                camera?.cameraControl?.setZoomRatio(zoom)
+            }
+            "mode" -> {
+                stopRecording()
+                videoMode = !videoMode
+                if (videoMode && flashMode == ImageCapture.FLASH_MODE_AUTO) flashMode = ImageCapture.FLASH_MODE_OFF
+                if (videoMode && ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                    != PackageManager.PERMISSION_GRANTED) audioPermission.launch(Manifest.permission.RECORD_AUDIO)
+                bindCamera()
+                HubLog.i("camera", if (videoMode) "videomodus" else "fotomodus")
+            }
+            "rec" -> if (recording != null) stopRecording() else startRecording()
+        }
+        return camState()
+    }
+
+    private fun camState(): JSONObject = JSONObject()
+        .put("flash", when (flashMode) { ImageCapture.FLASH_MODE_ON -> "on"; ImageCapture.FLASH_MODE_AUTO -> "auto"; else -> "off" })
+        .put("zoom", zoom)
+        .put("video", videoMode)
+        .put("rec", recording != null)
+        .put("recMs", if (recording != null) SystemClock.elapsedRealtime() - recStartedAt else 0L)
+
+    @SuppressLint("MissingPermission")
+    private fun startRecording() {
+        val vc = videoCapture ?: return
+        val name = "WatchHub_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/WatchHub")
+        }
+        val opts = MediaStoreOutputOptions.Builder(contentResolver, MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
+            .setContentValues(values).build()
+        var pending = vc.output.prepareRecording(this, opts)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+            pending = pending.withAudioEnabled()
+        sound.play(MediaActionSound.START_VIDEO_RECORDING)
+        recStartedAt = SystemClock.elapsedRealtime()
+        recording = pending.start(ContextCompat.getMainExecutor(this)) { ev ->
+            if (ev is VideoRecordEvent.Finalize) {
+                if (ev.hasError()) HubLog.e("camera", "video opslaan mislukt (fout ${ev.error})")
+                else HubLog.i("camera", "video opgeslagen in Movies/WatchHub")
+                recording = null
+                WatchLink.post(camState().put("t", "camstate"))
+            }
+        }
+        HubLog.i("camera", "video gestart")
+    }
+
+    private fun stopRecording() {
+        val r = recording ?: return
+        sound.play(MediaActionSound.STOP_VIDEO_RECORDING)
+        r.stop()
+        recording = null
     }
 
     override fun switchCamera() {

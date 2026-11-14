@@ -23,6 +23,16 @@ object TextImage {
 
     class Result(val base64: String, val width: Int, val height: Int, val format: String = "png")
 
+    /** A photo from a notification, scaled to [width] (height follows, at most [maxH]). */
+    fun photo(bmp: android.graphics.Bitmap, width: Int = 320, maxH: Int = 420): Result {
+        val h = (bmp.height.toFloat() * width / bmp.width).toInt().coerceIn(40, maxH)
+        val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, width, h, true)
+        val bos = ByteArrayOutputStream()
+        scaled.compress(Bitmap.CompressFormat.JPEG, 72, bos)
+        if (scaled !== bmp) scaled.recycle()
+        return Result(Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP), width, h, "jpg")
+    }
+
     /** A picture (e.g. album art) as a small JPEG for the watch. */
     fun picture(bmp: android.graphics.Bitmap, size: Int = 180): Result {
         val scaled = android.graphics.Bitmap.createScaledBitmap(bmp, size, size, true)

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
@@ -88,6 +89,12 @@ private fun ToolsScreen(onBack: () -> Unit) {
     val reminders = remember { mutableStateListOf<Reminder>().apply { addAll(Reminders.list(ctx)) } }
     var editRem by remember { mutableIntStateOf(-1) }
     var draftR by remember { mutableStateOf(Reminder(0, "", 9 * 60)) }
+    var haUrl by remember { mutableStateOf(HomeAssistant.url(ctx)) }
+    var haToken by remember { mutableStateOf(HomeAssistant.token(ctx)) }
+    var haStatus by remember { mutableStateOf("") }
+    var haAll by remember { mutableStateOf<List<HomeAssistant.Entity>>(emptyList()) }
+    var haFilter by remember { mutableStateOf("") }
+    val haChosen = remember { mutableStateListOf<String>().apply { addAll(HomeAssistant.chosen(ctx)) } }
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -138,6 +145,52 @@ private fun ToolsScreen(onBack: () -> Unit) {
                 if (missing.isNotEmpty()) OutlinedButton(onClick = {
                     actions.addAll(0, missing); Actions.save(ctx, actions.toList())
                 }) { Text("Zaklamp, trillen en muziek toevoegen") }
+            }
+
+            // ---- Home Assistant
+            HubCard("Home Assistant", Icons.Filled.Home, HubBlue) {
+                Hint("Je apparaten op je horloge (WatchHub → Huis): zie de toestand en tik om te schakelen. " +
+                    "Token maken: Home Assistant → je profiel → Beveiliging → Langlevende toegangstokens → Token aanmaken.")
+                OutlinedTextField(haUrl, { haUrl = it }, label = { Text("Adres, bv. http://192.168.1.10:8123") },
+                    singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(haToken, { haToken = it }, label = { Text("Langlevend toegangstoken") },
+                    singleLine = true, modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FilledTonalButton(onClick = {
+                        HomeAssistant.saveLogin(ctx, haUrl, haToken)
+                        haStatus = "Verbinden…"
+                        HomeAssistant.fetchAll(ctx) { list, err ->
+                            if (list != null) { haAll = list; haStatus = "Verbonden: ${list.size} apparaten gevonden" }
+                            else haStatus = "Mislukt: $err"
+                        }
+                    }, enabled = haUrl.isNotBlank() && haToken.isNotBlank()) { Text("Verbinden") }
+                }
+                if (haStatus.isNotEmpty()) Hint(haStatus)
+                if (haChosen.isNotEmpty()) {
+                    Text("Op je horloge (${haChosen.size})", style = MaterialTheme.typography.titleSmall)
+                    haChosen.forEach { id ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(haAll.firstOrNull { it.id == id }?.name ?: id, Modifier.weight(1f))
+                            TextButton(onClick = { haChosen.remove(id); HomeAssistant.saveChosen(ctx, haChosen.toList()) }) { Text("Weg") }
+                        }
+                    }
+                }
+                if (haAll.isNotEmpty()) {
+                    OutlinedTextField(haFilter, { haFilter = it }, label = { Text("Zoek apparaat") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth())
+                    haAll.filter { it.id !in haChosen && (haFilter.isBlank() ||
+                            it.name.contains(haFilter, true) || it.id.contains(haFilter, true)) }
+                        .take(40).forEach { e ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(e.name)
+                                    Hint("${e.id} · ${e.state}${if (e.unit.isNotEmpty()) " " + e.unit else ""}")
+                                }
+                                TextButton(onClick = { haChosen.add(e.id); HomeAssistant.saveChosen(ctx, haChosen.toList()) }) { Text("Toevoegen") }
+                            }
+                        }
+                }
             }
 
             // ---- Reminders

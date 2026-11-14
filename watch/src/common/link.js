@@ -243,7 +243,7 @@ export function log(level, msg) {
 }
 
 // Keep equal to versionCode in manifest.json: the phone uses it to offer updates
-export const VERSION = 17
+export const VERSION = 18
 
 export function send(obj, onFail) {
   if (obj && (obj.cmd === 'hello' || obj.cmd === 'page')) obj.v = VERSION

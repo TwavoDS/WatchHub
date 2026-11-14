@@ -87,6 +87,11 @@ private fun tests(): List<TestItem> = listOf(
     },
     TestItem("actions", "Acties", "Je tegels staan op het horloge; een tik voert ze uit (maak er eerst een bij Muziek, acties en herinneringen).",
         "Open acties") { WatchLink.gotoOnWatch(JSONObject().put("t", "goto").put("p", "actions"), appWasClosed = true) },
+    TestItem("huis", "Huis (Home Assistant)", "Je gekozen apparaten met hun toestand; een tik schakelt ze.", "Open Huis") {
+        WatchLink.gotoOnWatch(JSONObject().put("t", "goto").put("p", "huis"), appWasClosed = true)
+    },
+    TestItem("video", "Camera: flits, zoom en video", "Op het camerascherm: Flits, 1x/2x, Foto/Video. In Video start en stopt de knop een opname.", null) {},
+    TestItem("pic", "Foto in melding", "Laat iemand je een foto sturen op WhatsApp: de foto staat onder de tekst.", null) {},
     TestItem("reminder", "Herinnering", "Gele herinnering met trillen, blijft staan tot je ze wegtikt.", "Test nu") {
         HubNotificationService.instance?.sendReminder("Dit is een testherinnering", "LL") ?: noService()
     },

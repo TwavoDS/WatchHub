@@ -1,8 +1,8 @@
 {
   "package": "com.twavods.watchhub",
   "name": "WatchHub",
-  "versionName": "2.0.1",
-  "versionCode": 17,
+  "versionName": "2.1.0",
+  "versionCode": 18,
   "minPlatformVersion": 1000,
   "icon": "/common/logo.png",
   "deviceTypeList": [
@@ -52,6 +52,9 @@
       },
       "pages/actions": {
         "component": "actions"
+      },
+      "pages/huis": {
+        "component": "huis"
       }
     }
   }

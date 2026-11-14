@@ -235,8 +235,8 @@ private fun HomeScreen() {
                 }
             }
 
-            HubCard("Muziek, acties en herinneringen", Icons.Filled.PlayArrow, HubGreen) {
-                Hint("Muziek bedienen, tegels voor Home Assistant/Tasker en eigen herinneringen op je horloge.")
+            HubCard("Muziek, huis, acties en herinneringen", Icons.Filled.PlayArrow, HubGreen) {
+                Hint("Muziek bedienen, Home Assistant, tegels voor zaklamp/Tasker en eigen herinneringen op je horloge.")
                 FilledTonalButton(onClick = { ctx.startActivity(Intent(ctx, ToolsActivity::class.java)) }) { Text("Openen") }
             }
 

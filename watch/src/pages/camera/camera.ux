@@ -17,9 +17,12 @@
       <text class="dbg">{{dbg}}</text>
     </div>
 
-    <!-- Display mode: fill the screen, or show the whole picture -->
+    <!-- Top row: display mode, flash, zoom, photo/video -->
     <div class="mode-wrap">
       <text class="mode-btn" onclick="toggleMode">{{fit ? 'Heel' : 'Vol'}}</text>
+      <text if="{{!camNa}}" class="mode-btn {{flashMode === 'on' ? 'pill-on' : ''}}" onclick="cam('flash')">{{flashLabel}}</text>
+      <text if="{{!camNa}}" class="mode-btn" onclick="cam('zoom')">{{zoomLabel}}</text>
+      <text if="{{!camNa}}" class="mode-btn {{video ? 'pill-rec' : ''}}" onclick="cam('mode')">{{video ? 'Video' : 'Foto'}}</text>
     </div>
 
     <!-- Incoming notification while the camera is open -->
@@ -44,7 +47,7 @@
     <div class="controls">
       <text class="small-btn" onclick="toggleTimer">{{timerLabel}}</text>
       <div class="shutter-outer" onclick="onShutter">
-        <div class="shutter-inner {{busy ? 'shutter-busy' : ''}}"></div>
+        <div class="shutter-inner {{busy ? 'shutter-busy' : ''}} {{video ? 'shutter-video' : ''}} {{rec ? 'shutter-rec' : ''}}"></div>
       </div>
       <text class="small-btn" onclick="switchCamera">Cam</text>
     </div>
@@ -111,6 +114,12 @@ export default {
     timerIndex: 0,
     timerLabel: '0s',
     fit: false,
+    flashMode: 'off',
+    flashLabel: 'Flits',
+    zoomLabel: '1x',
+    video: false,
+    camNa: false,
+    rec: false,
     dbg: '',
     banner: ''
   },
@@ -152,6 +161,7 @@ export default {
     this.sendCmd({ cmd: 'stop' })
     if (S.unlisten) { S.unlisten(); S.unlisten = null }
     if (S.startTimer) { clearInterval(S.startTimer); S.startTimer = null }
+    if (S.recTimer) { clearInterval(S.recTimer); S.recTimer = null }
     link.setPage('')
   },
 
@@ -179,6 +189,7 @@ export default {
   },
 
   requestStream() {
+    link.send({ cmd: 'cam', a: 'state' })
     this.sendCmd({ cmd: 'start', m: this.fit ? 'fit' : 'fill' })
   },
 
@@ -220,6 +231,7 @@ export default {
     else if (msg.t === 'hello' || msg.t === 'linkOpen') this.requestStream()
     else if (msg.t === 'nocam' && !this.frameUri) this.status = 'Open Camera in WatchHub op je telefoon'
     else if (msg.t === 'notif') this.showBanner(msg)
+    else if (msg.t === 'camstate') this.onCamState(msg)
   },
 
   showBanner(n) {
@@ -297,7 +309,41 @@ export default {
     storage.set({ key: 'timerIndex', value: String(this.timerIndex) })
   },
 
+  cam(a) {
+    this.sendCmd({ cmd: 'cam', a: a })
+  },
+
+  onCamState(m) {
+    // Xiaomi camera mode: only display mode and timer are possible
+    this.camNa = !!m.na
+    if (m.na) return
+    this.flashMode = m.flash
+    this.flashLabel = m.flash === 'auto' ? 'Auto' : 'Flits'
+    this.zoomLabel = (Math.round(m.zoom * 10) / 10) + 'x'
+    this.video = !!m.video
+    const wasRec = this.rec
+    this.rec = !!m.rec
+    this.busy = false
+    if (this.rec && !wasRec) {
+      S.recStart = Date.now() - (m.recMs || 0)
+      try { vibrator.vibrate({ mode: 'short' }) } catch (e) {}
+      if (S.recTimer) clearInterval(S.recTimer)
+      S.recTimer = setInterval(() => {
+        const sec = Math.floor((Date.now() - S.recStart) / 1000)
+        this.status = 'Opname ' + Math.floor(sec / 60) + ':' + ('0' + (sec % 60)).slice(-2)
+      }, 1000)
+      this.status = 'Opname 0:00'
+    } else if (!this.rec && wasRec) {
+      if (S.recTimer) { clearInterval(S.recTimer); S.recTimer = null }
+      this.status = 'Video bewaard'
+      try { vibrator.vibrate({ mode: 'long' }) } catch (e) {}
+      setTimeout(() => { if (this.status === 'Video bewaard') this.status = '' }, 2500)
+    }
+  },
+
   onShutter() {
+    // Video: start/stop right away when recording, else after the timer
+    if (this.video && this.rec) { this.cam('rec'); return }
     if (this.busy) return
     this.busy = true
     const secs = TIMERS[this.timerIndex]
@@ -319,6 +365,7 @@ export default {
   },
 
   takePhoto() {
+    if (this.video) { this.cam('rec'); return }
     this.status = 'Foto nemen…'
     this.sendCmd({ cmd: 'shutter' })
     // Don't stay stuck if the answer never comes
@@ -415,16 +462,18 @@ export default {
 .mode-wrap {
   position: absolute;
   left: 0;
-  top: 34px;
+  top: 58px;
   width: 480px;
-  height: 60px;
+  height: 56px;
+  flex-direction: row;
   justify-content: center;
   align-items: center;
 }
 .mode-btn {
-  width: 96px;
-  height: 52px;
-  border-radius: 26px;
+  width: 82px;
+  height: 50px;
+  margin: 0 4px;
+  border-radius: 25px;
   background-color: rgba(0, 0, 0, 0.55);
   color: #ffffff;
   font-size: 24px;
@@ -433,7 +482,7 @@ export default {
 .top {
   position: absolute;
   left: 0;
-  top: 96px;
+  top: 116px;
   width: 480px;
   height: 60px;
   justify-content: center;
@@ -512,5 +561,22 @@ export default {
 }
 .shutter-busy {
   background-color: #ff6b00;
+}
+.pill-on {
+  background-color: #ffca28;
+  color: #000000;
+}
+.pill-rec {
+  background-color: #b71c1c;
+  color: #ffffff;
+}
+.shutter-video {
+  background-color: #e53935;
+}
+.shutter-rec {
+  width: 50px;
+  height: 50px;
+  border-radius: 8px;
+  background-color: #e53935;
 }
 </style>

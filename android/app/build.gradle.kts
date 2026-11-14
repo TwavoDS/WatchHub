@@ -12,8 +12,8 @@ android {
         applicationId = "com.twavods.watchhub"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "2.3.0"
+        versionCode = 21
+        versionName = "2.4.0"
     }
 
     signingConfigs {
@@ -63,4 +63,5 @@ dependencies {
     implementation("androidx.camera:camera-camera2:$camerax")
     implementation("androidx.camera:camera-lifecycle:$camerax")
     implementation("androidx.camera:camera-view:$camerax")
+    implementation("androidx.camera:camera-video:$camerax")
 }

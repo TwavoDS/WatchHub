@@ -32,6 +32,7 @@ export default {
       { page: 'nav', label: 'Navigatie', color: '#1976d2' },
       { page: 'music', label: 'Muziek', color: '#ab47bc' },
       { page: 'camera', label: 'Camera', color: '#ff6b00' },
+      { page: 'huis', label: 'Huis', color: '#4fc3f7' },
       { page: 'actions', label: 'Acties', color: '#ffca28' }
     ],
     status: 'Verbinden…',

@@ -47,6 +47,8 @@ object WatchLink {
         /** Take a photo; call [done] with null on success or an error message. */
         fun shutter(done: (String?) -> Unit)
         fun switchCamera()
+        /** Extra camera controls (flash, zoom, photo/video, recording). Null = not available here. */
+        fun camCmd(a: String): JSONObject? = null
     }
 
     @Volatile var source: Source? = null
@@ -278,6 +280,17 @@ object WatchLink {
             "ack" -> { inFlight.remove(msg.optInt("s")); sendNextFrame() }
             "shutter" -> shutter()
             "switch" -> source?.switchCamera()
+            "cam" -> {
+                val a = msg.optString("a")
+                main.post {
+                    val st = try { source?.camCmd(a) } catch (e: Exception) {
+                        HubLog.e("camera", "bediening '$a' mislukt", e); null
+                    }
+                    post(st?.put("t", "camstate")
+                        ?: JSONObject().put("t", "camstate").put("na", true)
+                            .put("msg", "Kan alleen met de WatchHub-camera"))
+                }
+            }
             else -> {
                 if (msg.optString("cmd") == "hello") {
                     if (msg.optInt("v") > 0) Updater.rememberWatchVersion(app, msg.optInt("v"))

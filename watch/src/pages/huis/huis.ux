@@ -1,0 +1,134 @@
+<template>
+  <list class="root">
+    <list-item type="head" class="li-head">
+      <text class="title">Huis</text>
+      <text class="status">{{status}}</text>
+    </list-item>
+    <list-item for="{{items}}" type="item" class="li-item">
+      <div class="tile {{$item.on ? 'tile-on' : ''}}" onclick="tap($item.id, $item.tap)">
+        <text class="name {{$item.on ? 'dark' : ''}}">{{$item.name}}</text>
+        <text class="state {{$item.on ? 'dark' : ''}}">{{$item.busy ? 'Bezig...' : $item.state}}</text>
+      </div>
+    </list-item>
+    <list-item type="foot" class="li-foot"><text class="status"></text></list-item>
+  </list>
+</template>
+
+<script>
+import * as link from '../../common/link.js'
+
+let unlisten = null
+let poll = null
+
+export default {
+  private: {
+    items: [],
+    status: 'Laden...'
+  },
+
+  onShow() {
+    link.bind(this.$app)
+    unlisten = link.listen((m) => this.onMessage(m))
+    link.setPage('huis')
+    this.refresh()
+    // States change by themselves too (someone switches a light): look again now and then
+    poll = setInterval(() => this.refresh(), 6000)
+  },
+
+  onHide() {
+    if (unlisten) { unlisten(); unlisten = null }
+    if (poll) { clearInterval(poll); poll = null }
+    link.setPage('')
+  },
+
+  refresh() {
+    link.send({ cmd: 'ha' }, () => { this.status = 'Geen verbinding met telefoon' })
+  },
+
+  onMessage(m) {
+    if (m.t === 'ha') {
+      this.items = (m.items || []).map((e) => ({ id: e.id, name: e.name, state: e.state, on: !!e.on, tap: !!e.tap, busy: false }))
+      this.status = m.err || ''
+    } else if (m.t === 'hares') {
+      link.vibrate(m.ok ? 'S' : 'LL')
+      if (!m.ok) this.status = m.msg || 'Mislukt'
+    }
+  },
+
+  tap(id, canTap) {
+    if (!canTap) return
+    this.status = ''
+    this.items = this.items.map((e) => e.id === id ? Object.assign({}, e, { busy: true }) : e)
+    link.send({ cmd: 'hatog', id: id }, () => { this.status = 'Niet verstuurd: geen verbinding' })
+  }
+}
+</script>
+
+<style>
+.root {
+  width: 480px;
+  height: 480px;
+  background-color: #000000;
+}
+.li-head {
+  width: 480px;
+  height: 120px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+.title {
+  height: 44px;
+  font-size: 34px;
+  font-weight: bold;
+  color: #4fc3f7;
+}
+.status {
+  width: 340px;
+  height: 30px;
+  font-size: 20px;
+  color: #888888;
+  text-align: center;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+.li-item {
+  width: 480px;
+  height: 92px;
+  justify-content: center;
+  align-items: center;
+}
+.tile {
+  width: 330px;
+  height: 80px;
+  border-radius: 24px;
+  background-color: #1e1e1e;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 24px;
+}
+.tile-on {
+  background-color: #ffca28;
+}
+.name {
+  height: 34px;
+  font-size: 26px;
+  color: #ffffff;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+.state {
+  height: 28px;
+  font-size: 20px;
+  color: #aaaaaa;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+.dark {
+  color: #000000;
+}
+.li-foot {
+  width: 480px;
+  height: 120px;
+}
+</style>

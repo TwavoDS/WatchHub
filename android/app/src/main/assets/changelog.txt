@@ -1,3 +1,8 @@
+## Telefoon 2.4.0 · Horloge 2.1.0
+- Foto's in meldingen: stuurt iemand een foto (WhatsApp, Telegram, nieuws-apps…), dan staat die onder de tekst op je horloge.
+- Camera: nieuwe knoppen bovenaan voor flits (uit/aan/auto), zoom (1x, 2x, 3x…) en Foto/Video. In Video start en stopt de sluiterknop een opname (met geluid), ook met de zelfontspanner. Video's staan in Movies/WatchHub. Werkt met de WatchHub-camera, niet in Xiaomi-cameramodus.
+- Home Assistant: nieuw scherm Huis op je horloge met je gekozen apparaten, hun toestand, en schakelen met een tik. Instellen bij Muziek, huis, acties en herinneringen.
+
 ## Telefoon 2.3.0 · Horloge 2.0.1
 - Acties die meteen werken, zonder Home Assistant of Tasker: Zaklamp aan/uit, Trillen / geluid, Muziek pauzeren/spelen. Ze staan standaard bij Acties op je horloge (had je al acties: knop "Zaklamp, trillen en muziek toevoegen").
 

@@ -36,6 +36,12 @@
         <text class="d-text" style="height: {{cur.textH}}px;">{{cur.text}}</text>
       </list-item>
 
+      <!-- Photo in the notification (WhatsApp photo, news picture, …) -->
+      <list-item if="{{cur.picH > 0}}" type="pic" class="li-img" style="height: {{cur.picH + 16}}px;">
+        <image if="{{cur.picImg}}" class="pic" src="{{cur.picImg}}" style="height: {{cur.picH}}px;"></image>
+        <text if="{{!cur.picImg}}" class="pic-wait" style="height: {{cur.picH}}px;">Foto laden...</text>
+      </list-item>
+
       <!-- Buttons of the notification (e.g. Opnemen / Weigeren / Markeren als gelezen) -->
       <list-item for="{{cur.actions}}" type="action" class="li-btn">
         <text class="act {{$item.cls}}" onclick="doAction($item.i)">{{$item.title}}</text>
@@ -123,6 +129,7 @@ export default {
     const n = link.notifs().find((x) => x.id === this.cur.id)
     if (!n) return false
     if (n.img && !this.cur.bodyImg) return true
+    if (n.pic && !this.cur.picImg) return true
     return (n.rimg || []).some((k, i) => k && this.cur.replies[i] && !this.cur.replies[i].img)
   },
 
@@ -136,6 +143,7 @@ export default {
 
   toView(n) {
     const img = link.imageFor(n.img)
+    const pic = link.imageFor(n.pic)
     const rimg = n.rimg || []
     return {
       id: n.id,
@@ -149,6 +157,8 @@ export default {
       dur: typeof n.dur === 'number' ? n.dur : 10,
       actions: (n.actions || []).map((a) => ({ i: a.i, title: a.title, cls: actClass(a.title) })),
       bodyImg: img ? img.uri : '',
+      picImg: pic ? pic.uri : '',
+      picH: n.pic ? (n.picH || 240) : 0,
       bodyW: img ? img.w : 0,
       bodyH: img ? img.h : 0,
       titleH: n.call ? textHeight(n.title, 36, 340, true) + 8 : textHeight(n.title, 26, 320, true),
@@ -376,6 +386,18 @@ export default {
   width: 480px;
   justify-content: center;
   align-items: center;
+}
+.pic {
+  width: 320px;
+  border-radius: 16px;
+}
+.pic-wait {
+  width: 320px;
+  border-radius: 16px;
+  background-color: #1e1e1e;
+  color: #888888;
+  font-size: 22px;
+  text-align: center;
 }
 .li-section {
   width: 480px;
