@@ -35,7 +35,6 @@
 
     <application
         android:name=".HubApp"
-        android:usesCleartextTraffic="true"
         android:allowBackup="false"
         android:icon="@android:drawable/ic_menu_camera"
         android:label="WatchHub"
