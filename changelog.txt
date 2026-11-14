@@ -1,0 +1,47 @@
+## Telefoon 2.4.0 · Horloge 2.1.0
+- Foto's in meldingen: stuurt iemand een foto (WhatsApp, Telegram, nieuws-apps…), dan staat die onder de tekst op je horloge.
+- Camera: nieuwe knoppen bovenaan voor flits (uit/aan/auto), zoom (1x, 2x, 3x…) en Foto/Video. In Video start en stopt de sluiterknop een opname (met geluid), ook met de zelfontspanner. Video's staan in Movies/WatchHub. Werkt met de WatchHub-camera, niet in Xiaomi-cameramodus.
+- Home Assistant: nieuw scherm Huis op je horloge met je gekozen apparaten, hun toestand, en schakelen met een tik. Instellen bij Muziek, huis, acties en herinneringen.
+
+## Telefoon 2.3.0 · Horloge 2.0.1
+- Acties die meteen werken, zonder Home Assistant of Tasker: Zaklamp aan/uit, Trillen / geluid, Muziek pauzeren/spelen. Ze staan standaard bij Acties op je horloge (had je al acties: knop "Zaklamp, trillen en muziek toevoegen").
+
+## Telefoon 2.2.1 · Horloge 2.0.1
+- Meldingen komen ook door als het horloge WatchHub stilletjes had afgesloten: het horloge bevestigt elke melding, en zonder bevestiging opent de telefoon WatchHub opnieuw met de melding. (Gevonden in je logboek bij het WhatsApp-bericht van 20:02.)
+
+## Telefoon 2.2.0 · Horloge 2.0.0
+- Nieuw op het horloge: Muziek. Toont wat er speelt op je telefoon, met hoes, en bedient afspelen, pauze, volgende, vorige en volume.
+- Nieuw: Acties. Eigen tegels op je horloge voor Home Assistant, IFTTT (webadres) of Tasker.
+- Nieuw: Herinneringen. Eigen herinneringen op een uur en dagen naar keuze, met trillen.
+- Navigatie werkt nu ook met OsmAnd, Komoot, Organic Maps, Waze en Sygic (eerste keer: stuur het logboek, dan stem ik het fijn af).
+- Het menu op het horloge scrolt, met Meldingen bovenaan.
+- De telefoon onthoudt welke horloge-versie je hebt.
+- Testlijst uitgebreid met muziek, acties, herinnering en batterijmelding.
+
+## Telefoon 2.1.0 · Horloge 1.9.0
+- Contacten en groepen (Algemeen): per persoon of groep "Altijd tonen" (ook in stille uren en Niet storen), "Nooit tonen" of een eigen trilpatroon en kleur.
+- Groepsberichten per app uitzetten (bv. WhatsApp-groepen).
+- Niet storen van je telefoon: wel tonen zonder trillen, niet doorsturen, of negeren.
+- Telefoonbatterij bijna leeg (15/20/30%) of vol: melding op je horloge.
+- Waarschuwing op je telefoon als je horloge niet meer verbonden is.
+- Oproepen via WhatsApp, Telegram, Messenger e.d. komen ook op het belscherm; het horloge toont van welke app.
+- Navigatie en camera openen nu ook de juiste pagina als WatchHub op het horloge nog open stond.
+- Emoji-afbeeldingen worden niet meer dubbel verstuurd.
+
+## Telefoon 2.0.1 · Horloge 1.8.1
+- Navigatie en camera openen nu ook de juiste pagina als WatchHub op het horloge nog open stond (bv. met een oude melding). Gevonden dankzij je logboek.
+- Camera op de telefoon openen springt op het horloge naar de camera.
+- Emoji-afbeeldingen worden niet meer dubbel verstuurd (sneller, minder batterij).
+- Geen valse foutmelding meer in het logboek bij het openen van de app.
+
+## Telefoon 2.0.0 · Horloge 1.8.0
+- Nieuw: Testen en logboek. Per functie een testknop en een vinkje, en een logboek van telefoon en horloge dat je met één knop deelt.
+- Nieuw: "Wat is nieuw" na elke update, en bij de updateknop zie je wat er verandert vóór je installeert.
+- Het horloge meldt zijn eigen fouten aan de telefoon (komt in het logboek).
+- Als de app ooit crasht, staat de oorzaak in het logboek.
+
+## Telefoon 1.9.0 · Horloge 1.7.2
+- Snelle antwoorden aanpassen, verwijderen, verschuiven en terugzetten; per app aan of uit.
+- Melding blijft open na de weergavetijd; alleen het scherm mag uit.
+- Updateknop voor telefoon- en horloge-app.
+- Emoji in meldingen en antwoorden.

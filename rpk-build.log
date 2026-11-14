@@ -1,0 +1,40 @@
+🔷 [11-14 10:56:09] [toolkit]: start build:  {
+  "projectPath": "/home/runner/work/WatchHub/WatchHub/watch",
+  "options": {
+    "sourceRoot": "./src",
+    "signRoot": "./sign",
+    "releasePath": "./dist",
+    "outputPath": "./build",
+    "enableJsc": false,
+    "enableProtobuf": false,
+    "enableE2e": false,
+    "enableStats": false,
+    "optimizeCssAttr": false,
+    "completeFeature": false,
+    "dropConsole": false,
+    "mode": "production"
+  },
+  "watch": false,
+  "node": "v22.23.4",
+  "platform": "linux",
+  "arch": "x64",
+  "toolkit": "2.0.5"
+}
+🔷 [11-14 10:56:10] [toolkit]: afterCompile: undefined
+🔷 [11-14 10:56:10] [toolkit]: afterCompile: Create a soft link to the node_modules folder
+🔷 [11-14 10:56:10] [toolkit]: afterCompile: Compile javascript project
+🔷 [11-14 10:56:10] [toolkit]: webpack complete
+🔷 [11-14 10:56:10] [toolkit]: afterCompile: Copy resource files
+🔷 [11-14 10:56:10] [toolkit]: afterCompile: Compress resource files
+🔷 [11-14 10:56:10] [toolkit]: afterCompile: Generate jsc bytecode
+🔷 [11-14 10:56:10] [toolkit]: afterCompile: Generate protobuf json
+🔷 [11-14 10:56:10] [toolkit]: afterCompile: compile lite card
+🔷 [11-14 10:56:10] [toolkit]: afterCompile: Package the project into an RPK file
+🔷 [11-14 10:56:10] [toolkit]: privatekeyPath is  /home/runner/work/WatchHub/WatchHub/.temp_watch/sign/release/private.pem 
+certificatePath is  /home/runner/work/WatchHub/WatchHub/.temp_watch/sign/release/certificate.pem
+✅ [11-14 10:56:10] [toolkit]: Project build and generate files：/home/runner/work/WatchHub/WatchHub/.temp_watch/dist/com.twavods.watchhub.release.2.1.0.rpk
+🔷 [11-14 10:56:10] [toolkit]: afterCompile: Generate diff json
+🔷 [11-14 10:56:10] [toolkit]: afterCompile: Migrate temporary project
+🔷 [11-14 10:56:10] [toolkit]: afterCompile: Check resource
+✅ [11-14 10:56:10] [toolkit]: build success: 1302ms
+🟠 [11-14 10:56:10] [toolkit]: please use AIoT-IDE: https://iot.mi.com/vela/quickapp/zh/guide/start/use-ide.html
