@@ -16,12 +16,13 @@ import java.net.URL
  * Phone -> watch: {"t":"ha","items":[{"id","name","state","on","tap"}],"err":"…"}
  */
 object HomeAssistant {
-    class Entity(val id: String, val name: String, val state: String, val unit: String) {
+    class Entity(val id: String, val name: String, val state: String, val unit: String,
+                 val attr: JSONObject = JSONObject()) {
         val domain get() = id.substringBefore('.')
     }
 
     /** Domains you can tap on the watch. */
-    private val TAPPABLE = setOf("light", "switch", "fan", "input_boolean", "automation", "cover", "lock",
+    private val TAPPABLE = setOf("climate", "light", "switch", "fan", "input_boolean", "automation", "cover", "lock",
         "script", "scene", "button", "input_button", "media_player", "siren", "humidifier", "vacuum")
     /** Domains worth offering in the picker (tappable ones + things to read). */
     val PICKABLE = TAPPABLE + setOf("sensor", "binary_sensor", "climate", "weather", "person", "device_tracker", "alarm_control_panel")
@@ -75,7 +76,7 @@ object HomeAssistant {
         val o = a.getJSONObject(i)
         val attr = o.optJSONObject("attributes") ?: JSONObject()
         Entity(o.optString("entity_id"), attr.optString("friendly_name", o.optString("entity_id")),
-            o.optString("state"), attr.optString("unit_of_measurement", ""))
+            o.optString("state"), attr.optString("unit_of_measurement", ""), attr)
     }
 
     /** Sends the chosen entities with their state to the watch. */
@@ -93,8 +94,20 @@ object HomeAssistant {
                 val items = JSONArray()
                 chosen(app).forEach { id ->
                     val e = all[id] ?: return@forEach
-                    items.put(JSONObject().put("id", id).put("name", e.name.take(30))
-                        .put("state", label(e)).put("on", isOn(e)).put("tap", e.domain in TAPPABLE))
+                    val item = JSONObject().put("id", id).put("name", e.name.take(30))
+                        .put("state", label(e)).put("on", isOn(e)).put("tap", e.domain in TAPPABLE)
+                    if (e.domain == "climate") {
+                        // Thermostat: the watch opens its own screen with − / + and the mode
+                        val a = e.attr
+                        item.put("clim", true).put("tap", true)
+                            .put("cur", a.optDouble("current_temperature", Double.NaN).let { if (it.isNaN()) JSONObject.NULL else it })
+                            .put("target", a.optDouble("temperature", Double.NaN).let { if (it.isNaN()) JSONObject.NULL else it })
+                            .put("min", a.optDouble("min_temp", 7.0)).put("max", a.optDouble("max_temp", 35.0))
+                            .put("step", a.optDouble("target_temp_step", 0.5))
+                            .put("mode", e.state)
+                            .put("modes", a.optJSONArray("hvac_modes") ?: JSONArray())
+                    }
+                    items.put(item)
                 }
                 out.put("items", items)
                 HubLog.i("huis", "${items.length()} apparaten naar horloge")
@@ -107,9 +120,34 @@ object HomeAssistant {
         }.start()
     }
 
+    /** Thermostat from the watch: new target temperature and/or mode. */
+    fun climate(ctx: Context, id: String, target: Double?, mode: String?) {
+        val app = ctx.applicationContext
+        Thread {
+            try {
+                if (mode != null) request(app, "POST", "/api/services/climate/set_hvac_mode",
+                    JSONObject().put("entity_id", id).put("hvac_mode", mode))
+                if (target != null) request(app, "POST", "/api/services/climate/set_temperature",
+                    JSONObject().put("entity_id", id).put("temperature", target))
+                HubLog.i("huis", "$id: " + listOfNotNull(target?.let { "$it°" }, mode).joinToString(", "))
+                WatchLink.post(JSONObject().put("t", "hares").put("id", id).put("ok", true))
+            } catch (e: Exception) {
+                HubLog.e("huis", "$id thermostaat mislukt: ${e.message}")
+                WatchLink.post(JSONObject().put("t", "hares").put("id", id).put("ok", false).put("msg", (e.message ?: "fout").take(40)))
+            }
+            main.postDelayed({ sendStates(app) }, 1200)
+        }.start()
+    }
+
     private fun isOn(e: Entity) = e.state in setOf("on", "open", "unlocked", "playing", "home", "cleaning", "heat", "cool")
 
     private fun label(e: Entity): String = when {
+        e.domain == "climate" -> {
+            val cur = e.attr.optDouble("current_temperature", Double.NaN)
+            val tgt = e.attr.optDouble("temperature", Double.NaN)
+            val mode = when (e.state) { "heat" -> "verwarmen"; "cool" -> "koelen"; "off" -> "uit"; "auto" -> "auto"; "heat_cool" -> "auto"; else -> e.state }
+            listOfNotNull(if (cur.isNaN()) null else "nu ${fmt(cur)}°", if (tgt.isNaN()) null else "doel ${fmt(tgt)}°", mode).joinToString(" · ")
+        }
         e.unit.isNotEmpty() -> "${e.state} ${e.unit}"
         else -> when (e.state) {
             "on" -> "aan"; "off" -> "uit"; "open" -> "open"; "closed" -> "dicht"
@@ -118,6 +156,8 @@ object HomeAssistant {
             else -> if (e.domain in setOf("script", "scene", "button", "input_button")) "tik om te starten" else e.state
         }
     }
+
+    private fun fmt(d: Double) = if (d % 1.0 == 0.0) d.toInt().toString() else String.format(java.util.Locale.ROOT, "%.1f", d)
 
     /** Tap on the watch: switch, open/close, run. */
     fun tap(ctx: Context, id: String) {

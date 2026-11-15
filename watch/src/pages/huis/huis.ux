@@ -1,5 +1,6 @@
 <template>
-  <list class="root">
+  <div class="page">
+  <list if="{{!clim}}" class="root">
     <list-item type="head" class="li-head">
       <text class="title">Huis</text>
       <text class="status">{{status}}</text>
@@ -12,6 +13,20 @@
     </list-item>
     <list-item type="foot" class="li-foot"><text class="status"></text></list-item>
   </list>
+
+  <!-- Thermostat -->
+  <div if="{{clim}}" class="clim">
+    <text class="c-name">{{clim.name}}</text>
+    <text class="c-cur">{{curLabel}}</text>
+    <div class="c-row">
+      <text class="c-btn" onclick="step(-1)">-</text>
+      <text class="c-target">{{targetLabel}}</text>
+      <text class="c-btn" onclick="step(1)">+</text>
+    </div>
+    <text class="c-mode {{clim.mode === 'off' ? '' : 'c-mode-on'}}" onclick="nextMode">{{modeLabel}}</text>
+    <text class="c-back" onclick="closeClim">Terug</text>
+  </div>
+  </div>
 </template>
 
 <script>
@@ -19,10 +34,18 @@ import * as link from '../../common/link.js'
 
 let unlisten = null
 let poll = null
+let sendTimer = null
+let holdUntil = 0   // ignore states from the phone while a change of yours is on its way
+
+const MODES = { heat: 'Verwarmen', cool: 'Koelen', off: 'Uit', auto: 'Auto', heat_cool: 'Auto', dry: 'Drogen', fan_only: 'Ventilator' }
 
 export default {
   private: {
     items: [],
+    clim: null,
+    modeLabel: "",
+    curLabel: "",
+    targetLabel: "",
     status: 'Laden...'
   },
 
@@ -36,6 +59,7 @@ export default {
   },
 
   onHide() {
+    if (sendTimer) { clearTimeout(sendTimer); sendTimer = null }
     if (unlisten) { unlisten(); unlisten = null }
     if (poll) { clearInterval(poll); poll = null }
     link.setPage('')
@@ -45,10 +69,66 @@ export default {
     link.send({ cmd: 'ha' }, () => { this.status = 'Geen verbinding met telefoon' })
   },
 
+  openClimate(e) {
+    const has = (v) => v !== null && v !== undefined
+    this.clim = {
+      id: e.id, name: e.name,
+      cur: has(e.cur) ? Math.round(e.cur * 10) / 10 : null,
+      target: has(e.target) ? e.target : null,
+      min: e.min || 7, max: e.max || 35, step: e.step || 0.5,
+      mode: e.mode, modes: e.modes || []
+    }
+    this.labels()
+  },
+
+  labels() {
+    const c = this.clim
+    this.curLabel = c.cur !== null ? 'Nu ' + c.cur + '°' : ''
+    this.targetLabel = c.target !== null ? c.target + '°' : '--'
+    this.modeLabel = MODES[c.mode] || c.mode
+  },
+
+  closeClim() {
+    this.clim = null
+    this.refresh()
+  },
+
+  step(dir) {
+    const c = this.clim
+    if (!c) return
+    const start = c.target === null ? 20 : c.target
+    const t = Math.min(c.max, Math.max(c.min, Math.round((start + dir * c.step) * 10) / 10))
+    this.clim = Object.assign({}, c, { target: t })
+    this.labels()
+    holdUntil = Date.now() + 4000
+    // Wait until you stop tapping, then send once
+    if (sendTimer) clearTimeout(sendTimer)
+    sendTimer = setTimeout(() => {
+      sendTimer = null
+      link.send({ cmd: 'haclim', id: c.id, t: t }, () => { this.status = 'Niet verstuurd: geen verbinding' })
+    }, 1200)
+  },
+
+  nextMode() {
+    const c = this.clim
+    if (!c || !c.modes.length) return
+    const i = c.modes.indexOf(c.mode)
+    const mode = c.modes[(i + 1) % c.modes.length]
+    this.clim = Object.assign({}, c, { mode: mode })
+    this.labels()
+    holdUntil = Date.now() + 4000
+    link.send({ cmd: 'haclim', id: c.id, mode: mode })
+  },
+
   onMessage(m) {
     if (m.t === 'ha') {
-      this.items = (m.items || []).map((e) => ({ id: e.id, name: e.name, state: e.state, on: !!e.on, tap: !!e.tap, busy: false }))
-      this.status = m.err || ''
+      this.items = (m.items || []).map((e) => Object.assign({}, e, { on: !!e.on, tap: !!e.tap, busy: false }))
+      this.status = m.err || ""
+      // Keep an open thermostat up to date (unless you are changing it right now)
+      if (this.clim && Date.now() > holdUntil) {
+        const c = this.items.find((e) => e.id === this.clim.id)
+        if (c) this.openClimate(c)
+      }
     } else if (m.t === 'hares') {
       link.vibrate(m.ok ? 'S' : 'LL')
       if (!m.ok) this.status = m.msg || 'Mislukt'
@@ -57,6 +137,8 @@ export default {
 
   tap(id, canTap) {
     if (!canTap) return
+    const it = this.items.find((e) => e.id === id)
+    if (it && it.clim) { this.openClimate(it); return }
     this.status = ''
     this.items = this.items.map((e) => e.id === id ? Object.assign({}, e, { busy: true }) : e)
     link.send({ cmd: 'hatog', id: id }, () => { this.status = 'Niet verstuurd: geen verbinding' })
@@ -65,6 +147,80 @@ export default {
 </script>
 
 <style>
+.page {
+  width: 480px;
+  height: 480px;
+  background-color: #000000;
+}
+.clim {
+  width: 480px;
+  height: 480px;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 56px;
+}
+.c-name {
+  width: 320px;
+  height: 36px;
+  font-size: 26px;
+  color: #ffffff;
+  text-align: center;
+  lines: 1;
+  text-overflow: ellipsis;
+}
+.c-cur {
+  height: 32px;
+  font-size: 22px;
+  color: #aaaaaa;
+}
+.c-row {
+  width: 400px;
+  height: 130px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+.c-btn {
+  width: 92px;
+  height: 92px;
+  border-radius: 46px;
+  background-color: #263238;
+  color: #ffffff;
+  font-size: 52px;
+  text-align: center;
+}
+.c-target {
+  width: 190px;
+  height: 100px;
+  font-size: 72px;
+  font-weight: bold;
+  color: #ff8a65;
+  text-align: center;
+}
+.c-mode {
+  width: 200px;
+  height: 56px;
+  margin-top: 12px;
+  border-radius: 28px;
+  background-color: #263238;
+  color: #ffffff;
+  font-size: 24px;
+  text-align: center;
+}
+.c-mode-on {
+  background-color: #ff7043;
+  color: #000000;
+}
+.c-back {
+  width: 160px;
+  height: 52px;
+  margin-top: 14px;
+  border-radius: 26px;
+  background-color: #37474f;
+  color: #ffffff;
+  font-size: 22px;
+  text-align: center;
+}
 .root {
   width: 480px;
   height: 480px;

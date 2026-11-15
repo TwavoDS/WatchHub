@@ -1,3 +1,6 @@
+## Telefoon 2.5.0 · Horloge 2.3.0
+- Thermostaat bedienen: tik in Huis op je thermostaat (climate-apparaat uit Home Assistant). Je ziet de huidige temperatuur, zet de gewenste temperatuur met − en +, en wisselt de stand (verwarmen, uit, auto…). In de lijst staat "nu 20,5° · doel 21° · verwarmen".
+
 ## Telefoon 2.4.2 · Horloge 2.2.1
 - Wegswipen opnieuw gemaakt: de melding schuift niet meer mee (dat liet het horloge vastlopen), maar verdwijnt meteen zodra je ver genoeg naar links veegt, met een tril.
 - Home Assistant: adres en token worden bewaard terwijl je typt (vroeger pas na Verbinden). Zonder http:// ervoor wordt dat er zelf bij gezet. Problemen staan nu in het logboek.

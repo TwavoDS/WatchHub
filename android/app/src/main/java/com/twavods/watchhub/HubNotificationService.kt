@@ -105,6 +105,11 @@ class HubNotificationService : NotificationListenerService() {
         WatchLink.handlers["actions"] = { Actions.sendList(this) }
         WatchLink.handlers["ha"] = { HomeAssistant.sendStates(this) }
         WatchLink.handlers["hatog"] = { m -> HomeAssistant.tap(this, m.optString("id")) }
+        WatchLink.handlers["haclim"] = { m ->
+            HomeAssistant.climate(this, m.optString("id"),
+                if (m.has("t")) m.optDouble("t") else null,
+                m.optString("mode").ifEmpty { null })
+        }
         WatchLink.handlers["act"] = { m -> Actions.run(this, m.optString("id")) }
         WatchLink.handlers["findphone"] = { m -> if (m.optBoolean("on")) FindPhone.start(this) else FindPhone.stop() }
         try {
