@@ -1,3 +1,7 @@
+## Telefoon 2.4.2 · Horloge 2.2.1
+- Wegswipen opnieuw gemaakt: de melding schuift niet meer mee (dat liet het horloge vastlopen), maar verdwijnt meteen zodra je ver genoeg naar links veegt, met een tril.
+- Home Assistant: adres en token worden bewaard terwijl je typt (vroeger pas na Verbinden). Zonder http:// ervoor wordt dat er zelf bij gezet. Problemen staan nu in het logboek.
+
 ## Telefoon 2.4.1 · Horloge 2.2.0
 - Meldingen wegswipen: veeg in de lijst een melding naar links, of veeg in een geopende melding naar links. Ze verdwijnt ook van je telefoon.
 - Foto's in meldingen: stuurt iemand een foto (WhatsApp, Telegram, nieuws-apps…), dan staat die onder de tekst op je horloge.

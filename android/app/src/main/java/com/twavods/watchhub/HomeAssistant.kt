@@ -34,8 +34,12 @@ object HomeAssistant {
     fun chosen(ctx: Context): List<String> = (prefs(ctx).getString("ids", "") ?: "").split('\n').filter { it.isNotBlank() }
     fun configured(ctx: Context) = url(ctx).isNotBlank() && token(ctx).isNotBlank()
 
-    fun saveLogin(ctx: Context, url: String, token: String) =
-        prefs(ctx).edit().putString("url", url.trim().trimEnd('/')).putString("token", token.trim()).apply()
+    /** Saved while typing, so it is never lost by leaving the screen without pressing a button. */
+    fun saveLogin(ctx: Context, url: String, token: String) {
+        var u = url.trim().trimEnd('/')
+        if (u.isNotEmpty() && !u.startsWith("http://") && !u.startsWith("https://")) u = "http://$u"
+        prefs(ctx).edit().putString("url", u).putString("token", token.trim()).commit()
+    }
 
     fun saveChosen(ctx: Context, ids: List<String>) = prefs(ctx).edit().putString("ids", ids.joinToString("\n")).apply()
 
@@ -78,6 +82,7 @@ object HomeAssistant {
     fun sendStates(ctx: Context) {
         val app = ctx.applicationContext
         if (!configured(app)) {
+            HubLog.w("huis", "horloge vroeg Huis, maar adres of token ontbreekt (adres: ${if (url(app).isBlank()) "leeg" else "ok"}, token: ${if (token(app).isBlank()) "leeg" else "ok"})")
             WatchLink.post(JSONObject().put("t", "ha").put("items", JSONArray()).put("err", "Stel Home Assistant in op je telefoon"))
             return
         }
@@ -92,8 +97,10 @@ object HomeAssistant {
                         .put("state", label(e)).put("on", isOn(e)).put("tap", e.domain in TAPPABLE))
                 }
                 out.put("items", items)
+                HubLog.i("huis", "${items.length()} apparaten naar horloge")
                 if (items.length() == 0) out.put("err", "Kies apparaten in WatchHub op je telefoon")
             } catch (e: Exception) {
+                HubLog.e("huis", "toestand ophalen mislukt: ${e.message}")
                 out.put("items", JSONArray()).put("err", "Home Assistant: ${e.message}")
             }
             WatchLink.post(out)

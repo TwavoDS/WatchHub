@@ -151,9 +151,9 @@ private fun ToolsScreen(onBack: () -> Unit) {
             HubCard("Home Assistant", Icons.Filled.Home, HubBlue) {
                 Hint("Je apparaten op je horloge (WatchHub → Huis): zie de toestand en tik om te schakelen. " +
                     "Token maken: Home Assistant → je profiel → Beveiliging → Langlevende toegangstokens → Token aanmaken.")
-                OutlinedTextField(haUrl, { haUrl = it }, label = { Text("Adres, bv. http://192.168.1.10:8123") },
+                OutlinedTextField(haUrl, { haUrl = it; HomeAssistant.saveLogin(ctx, haUrl, haToken) }, label = { Text("Adres, bv. http://192.168.1.10:8123") },
                     singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(haToken, { haToken = it }, label = { Text("Langlevend toegangstoken") },
+                OutlinedTextField(haToken, { haToken = it; HomeAssistant.saveLogin(ctx, haUrl, haToken) }, label = { Text("Langlevend toegangstoken") },
                     singleLine = true, modifier = Modifier.fillMaxWidth(),
                     visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

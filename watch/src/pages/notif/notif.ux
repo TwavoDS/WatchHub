@@ -8,8 +8,8 @@
         <!-- Swipe a row to the left to clear it -->
         <list-item for="{{items}}" type="item" class="row-wrap"
                    ontouchstart="rowStart($idx)" ontouchmove="rowMove($idx)" ontouchend="rowEnd($idx)"
-                   ontouchcancel="rowCancel($idx)" onclick="openItem($idx)">
-          <div class="row" style="margin-left: {{$item.dx}}px; opacity: {{$item.dx < 0 ? 0.5 : 1}};">
+                   onswipe="rowSwipe($idx)" onclick="openItem($idx)">
+          <div class="row">
             <div class="bar" style="background-color: {{$item.color}};"></div>
             <image if="{{$item.icon}}" class="icon" src="{{$item.icon}}"></image>
             <div class="row-text">
@@ -26,7 +26,7 @@
 
     <!-- One notification: a list, because that is what scrolls reliably on the watch -->
     <list if="{{open}}" class="detail" onclick="keepOpen"
-          ontouchstart="detStart" ontouchend="detEnd">
+          ontouchstart="detStart" ontouchmove="detMove" onswipe="detSwipe">
       <list-item type="head" class="li-head">
         <image if="{{cur.icon}}" class="big-icon" src="{{cur.icon}}"></image>
         <text class="d-app" style="color: {{cur.color}};">{{cur.call ? cur.app + ' · oproep' : cur.app}} · {{cur.time}}</text>
@@ -94,7 +94,7 @@ function actClass(title) {
 }
 
 // Swipe state (not shown, so not reactive)
-const swipe = { idx: -1, x: 0, y: 0, dx: 0, horizontal: null, endedAt: 0 }
+const swipe = { idx: -1, x: 0, y: 0, done: false, endedAt: 0 }
 
 /** Position of the finger in a touch event (start/move use touches, end uses changedTouches). */
 function touchOf(e) {
@@ -162,7 +162,6 @@ export default {
     const pic = link.imageFor(n.pic)
     const rimg = n.rimg || []
     return {
-      dx: 0,
       id: n.id,
       app: n.app,
       title: n.title,
@@ -225,69 +224,68 @@ export default {
 
   // ---- Swipe to clear ----------------------------------------------------------
 
+  // No moving along with the finger: redrawing the list while touching made the watch
+  // hang. A clear swipe to the left clears the row as soon as it is far enough.
   rowStart(idx, e) {
     const t = touchOf(e)
-    swipe.idx = idx; swipe.x = t.x; swipe.y = t.y; swipe.dx = 0; swipe.horizontal = null
+    swipe.idx = idx; swipe.x = t.x; swipe.y = t.y; swipe.done = false
   },
 
   rowMove(idx, e) {
-    if (swipe.idx !== idx) return
+    if (swipe.idx !== idx || swipe.done) return
     const t = touchOf(e)
     const dx = t.x - swipe.x
     const dy = t.y - swipe.y
-    if (swipe.horizontal === null && (Math.abs(dx) > 12 || Math.abs(dy) > 12)) {
-      swipe.horizontal = Math.abs(dx) > Math.abs(dy)
-    }
-    if (!swipe.horizontal) return
-    const shown = Math.min(0, Math.round(dx / 10) * 10)   // only to the left; round to spare redraws
-    if (shown !== swipe.dx) {
-      swipe.dx = shown
-      this.setDx(idx, shown)
+    if (dx < -90 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      swipe.done = true
+      this.clearRow(idx)
     }
   },
 
   rowEnd(idx) {
-    if (swipe.idx !== idx) return
-    const far = swipe.horizontal && swipe.dx <= -110
-    if (swipe.horizontal) swipe.endedAt = Date.now()
-    swipe.idx = -1
-    const it = this.items[idx]
-    if (far && it) {
-      link.vibrate('S')
-      link.dismiss(it.id)
-      this.refresh()
-    } else if (swipe.dx !== 0) {
-      this.setDx(idx, 0)
+    if (swipe.idx === idx) swipe.idx = -1
+  },
+
+  rowSwipe(idx, e) {
+    if (e && e.direction === 'left' && !swipe.done) {
+      swipe.done = true
+      this.clearRow(idx)
     }
-    swipe.dx = 0
   },
 
-  rowCancel(idx) {
-    if (swipe.dx !== 0) this.setDx(idx, 0)
-    swipe.idx = -1; swipe.dx = 0
-  },
-
-  setDx(idx, dx) {
+  clearRow(idx) {
     const it = this.items[idx]
     if (!it) return
-    this.items.splice(idx, 1, Object.assign({}, it, { dx: dx }))
+    swipe.endedAt = Date.now()
+    link.vibrate('S')
+    link.dismiss(it.id)
+    setTimeout(() => this.refresh(), 50)
   },
 
   detStart(e) {
     const t = touchOf(e)
-    swipe.x = t.x; swipe.y = t.y
+    swipe.x = t.x; swipe.y = t.y; swipe.done = false
   },
 
-  detEnd(e) {
+  detMove(e) {
+    if (swipe.done) return
     const t = touchOf(e)
     const dx = t.x - swipe.x
     const dy = t.y - swipe.y
     // Swipe left (right is the watch's own "back"): clear this notification
-    if (dx < -120 && Math.abs(dx) > Math.abs(dy) * 1.5 && !this.cur.call) {
-      swipe.endedAt = Date.now()
-      link.vibrate('S')
-      this.dismissCur()
-    }
+    if (dx < -110 && Math.abs(dx) > Math.abs(dy) * 1.5) this.detClear()
+  },
+
+  detSwipe(e) {
+    if (e && e.direction === 'left' && !swipe.done) this.detClear()
+  },
+
+  detClear() {
+    if (this.cur.call) return
+    swipe.done = true
+    swipe.endedAt = Date.now()
+    link.vibrate('S')
+    this.dismissCur()
   },
 
   showItem(idx, automatic) {
