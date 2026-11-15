@@ -5,12 +5,17 @@
       <text class="title">Meldingen</text>
       <text if="{{items.length === 0}}" class="empty">{{status}}</text>
       <list if="{{items.length > 0}}" class="list">
-        <list-item for="{{items}}" type="item" class="row" onclick="openItem($idx)">
-          <div class="bar" style="background-color: {{$item.color}};"></div>
-          <image if="{{$item.icon}}" class="icon" src="{{$item.icon}}"></image>
-          <div class="row-text">
-            <text class="row-app" style="color: {{$item.color}};">{{$item.app}} · {{$item.time}}</text>
-            <text class="row-title">{{$item.title || $item.text}}</text>
+        <!-- Swipe a row to the left to clear it -->
+        <list-item for="{{items}}" type="item" class="row-wrap"
+                   ontouchstart="rowStart($idx)" ontouchmove="rowMove($idx)" ontouchend="rowEnd($idx)"
+                   ontouchcancel="rowCancel($idx)" onclick="openItem($idx)">
+          <div class="row" style="margin-left: {{$item.dx}}px; opacity: {{$item.dx < 0 ? 0.5 : 1}};">
+            <div class="bar" style="background-color: {{$item.color}};"></div>
+            <image if="{{$item.icon}}" class="icon" src="{{$item.icon}}"></image>
+            <div class="row-text">
+              <text class="row-app" style="color: {{$item.color}};">{{$item.app}} · {{$item.time}}</text>
+              <text class="row-title">{{$item.title || $item.text}}</text>
+            </div>
           </div>
         </list-item>
         <list-item type="footer" class="footer">
@@ -20,7 +25,8 @@
     </div>
 
     <!-- One notification: a list, because that is what scrolls reliably on the watch -->
-    <list if="{{open}}" class="detail" onclick="keepOpen">
+    <list if="{{open}}" class="detail" onclick="keepOpen"
+          ontouchstart="detStart" ontouchend="detEnd">
       <list-item type="head" class="li-head">
         <image if="{{cur.icon}}" class="big-icon" src="{{cur.icon}}"></image>
         <text class="d-app" style="color: {{cur.color}};">{{cur.call ? cur.app + ' · oproep' : cur.app}} · {{cur.time}}</text>
@@ -87,6 +93,16 @@ function actClass(title) {
   return ''
 }
 
+// Swipe state (not shown, so not reactive)
+const swipe = { idx: -1, x: 0, y: 0, dx: 0, horizontal: null, endedAt: 0 }
+
+/** Position of the finger in a touch event (start/move use touches, end uses changedTouches). */
+function touchOf(e) {
+  const list = (e && ((e.changedTouches && e.changedTouches.length) ? e.changedTouches : e.touches)) || []
+  const t = list[0] || {}
+  return { x: t.globalX !== undefined ? t.globalX : (t.clientX || 0), y: t.globalY !== undefined ? t.globalY : (t.clientY || 0) }
+}
+
 /** Rough height of wrapped text, because text in a list collapses without one. */
 function textHeight(str, size, width, bold) {
   const s = String(str || '')
@@ -146,6 +162,7 @@ export default {
     const pic = link.imageFor(n.pic)
     const rimg = n.rimg || []
     return {
+      dx: 0,
       id: n.id,
       app: n.app,
       title: n.title,
@@ -201,7 +218,76 @@ export default {
   },
 
   openItem(idx) {
+    // A swipe also ends with a tap: don't open what was just swiped
+    if (Date.now() - swipe.endedAt < 400) return
     this.showItem(idx, false)
+  },
+
+  // ---- Swipe to clear ----------------------------------------------------------
+
+  rowStart(idx, e) {
+    const t = touchOf(e)
+    swipe.idx = idx; swipe.x = t.x; swipe.y = t.y; swipe.dx = 0; swipe.horizontal = null
+  },
+
+  rowMove(idx, e) {
+    if (swipe.idx !== idx) return
+    const t = touchOf(e)
+    const dx = t.x - swipe.x
+    const dy = t.y - swipe.y
+    if (swipe.horizontal === null && (Math.abs(dx) > 12 || Math.abs(dy) > 12)) {
+      swipe.horizontal = Math.abs(dx) > Math.abs(dy)
+    }
+    if (!swipe.horizontal) return
+    const shown = Math.min(0, Math.round(dx / 10) * 10)   // only to the left; round to spare redraws
+    if (shown !== swipe.dx) {
+      swipe.dx = shown
+      this.setDx(idx, shown)
+    }
+  },
+
+  rowEnd(idx) {
+    if (swipe.idx !== idx) return
+    const far = swipe.horizontal && swipe.dx <= -110
+    if (swipe.horizontal) swipe.endedAt = Date.now()
+    swipe.idx = -1
+    const it = this.items[idx]
+    if (far && it) {
+      link.vibrate('S')
+      link.dismiss(it.id)
+      this.refresh()
+    } else if (swipe.dx !== 0) {
+      this.setDx(idx, 0)
+    }
+    swipe.dx = 0
+  },
+
+  rowCancel(idx) {
+    if (swipe.dx !== 0) this.setDx(idx, 0)
+    swipe.idx = -1; swipe.dx = 0
+  },
+
+  setDx(idx, dx) {
+    const it = this.items[idx]
+    if (!it) return
+    this.items.splice(idx, 1, Object.assign({}, it, { dx: dx }))
+  },
+
+  detStart(e) {
+    const t = touchOf(e)
+    swipe.x = t.x; swipe.y = t.y
+  },
+
+  detEnd(e) {
+    const t = touchOf(e)
+    const dx = t.x - swipe.x
+    const dy = t.y - swipe.y
+    // Swipe left (right is the watch's own "back"): clear this notification
+    if (dx < -120 && Math.abs(dx) > Math.abs(dy) * 1.5 && !this.cur.call) {
+      swipe.endedAt = Date.now()
+      link.vibrate('S')
+      this.dismissCur()
+    }
   },
 
   showItem(idx, automatic) {
@@ -319,10 +405,15 @@ export default {
   width: 400px;
   height: 400px;
 }
+.row-wrap {
+  width: 400px;
+  height: 106px;
+  justify-content: flex-start;
+  align-items: flex-start;
+}
 .row {
   width: 400px;
   height: 96px;
-  margin-bottom: 10px;
   border-radius: 24px;
   background-color: #1e1e1e;
   flex-direction: row;

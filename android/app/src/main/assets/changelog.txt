@@ -1,4 +1,5 @@
-## Telefoon 2.4.0 · Horloge 2.1.0
+## Telefoon 2.4.1 · Horloge 2.2.0
+- Meldingen wegswipen: veeg in de lijst een melding naar links, of veeg in een geopende melding naar links. Ze verdwijnt ook van je telefoon.
 - Foto's in meldingen: stuurt iemand een foto (WhatsApp, Telegram, nieuws-apps…), dan staat die onder de tekst op je horloge.
 - Camera: nieuwe knoppen bovenaan voor flits (uit/aan/auto), zoom (1x, 2x, 3x…) en Foto/Video. In Video start en stopt de sluiterknop een opname (met geluid), ook met de zelfontspanner. Video's staan in Movies/WatchHub. Werkt met de WatchHub-camera, niet in Xiaomi-cameramodus.
 - Home Assistant: nieuw scherm Huis op je horloge met je gekozen apparaten, hun toestand, en schakelen met een tik. Instellen bij Muziek, huis, acties en herinneringen.
